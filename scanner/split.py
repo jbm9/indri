@@ -59,7 +59,7 @@ class recording_channelizer(gr.top_block):
         self.Fc = Fc
 
         self.holdoff = holdoff = 0.5
-        self.threshold = threshold = -50.0
+        self.threshold = threshold # = -50.0
 
         
         self.base_url = base_url
@@ -80,7 +80,7 @@ class recording_channelizer(gr.top_block):
         print "#"
         print "#"
 
-        print "# Starting up scanner: Fs=%d, Fchan=%d, n_chan=%d" % (samp_rate, chan_rate, n_channels)
+        print "# Starting up scanner: Fs=%d, Fchan=%d, n_chan=%d, threshold=%d" % (samp_rate, chan_rate, n_channels, threshold)
         if channels:
             missing_channels = set(channels)
             skipped_channels = 0
