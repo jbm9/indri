@@ -1,0 +1,15 @@
+.channel_xmit_unknown { 
+    background-color: #888; 
+}
+
+.channel_xmit_noxmit { 
+    background-color: #ccc; 
+}
+
+.channel_xmit_inxmit { 
+    background-color: #c99; 
+}
+
+.channel_status_control {
+    background-color: #cc9;
+}
