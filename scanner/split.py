@@ -289,7 +289,7 @@ if __name__ == '__main__':
         channels = map(int, filter(None, lines))
         f.close()
 
-    tb = recording_channelizer(channels, int(options.samp_rate), int(options.freq), options.url, options.threshold)
+    tb = recording_channelizer(channels, int(options.samp_rate), int(options.freq), options.url, int(options.threshold))
     tb.start()
 
     while True:
