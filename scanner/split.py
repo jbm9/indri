@@ -142,7 +142,7 @@ class recording_channelizer(gr.top_block):
             cmd = int(s["cmd"], 16)
             if 0x2d0 >= cmd:
                 tunefreq = 851012500 + 25000*cmd
-                if tunefreq not in self.channels:
+                if self.channels and tunefreq not in self.channels:
                     print "UNK** %s" % str(s)
                 else:
                     print "tun: %s" % str(s)
