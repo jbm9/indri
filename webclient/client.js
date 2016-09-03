@@ -1,4 +1,4 @@
-var hostname = "52.43.230.29", // document.location.hostname, // XXX TODO
+var hostname = document.location.hostname, // XXX TODO
     connection = new WebSocket('ws://' + hostname + ':8081/'),
     count,
     msg = {
@@ -28,16 +28,10 @@ connection.onmessage = function (e) {
   var response = JSON.parse(e.data);
   console.log('Server: ' + e.data);
 
-  if (response.type != "click") { return; }
-
-  var a = response.sender.split("-");
-  var freq = a[0];
-  var status = a[1];
-
-  switch(status) {
-      case "start":  channelboard.channelStart(freq); break;
-      case "stop": channelboard.channelStop(freq); break;
-      
-  };
+    switch(response.type) {
+	case "start": channelboard.channelStart(response.freq); break;
+	case "stop":  channelboard.channelStop(response.freq); break;
+	case "tune":  channelboard.channelTag(response.freq, response.tg); break;
+    };
 
 };

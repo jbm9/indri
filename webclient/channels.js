@@ -16,6 +16,12 @@ var channelboard = (function() {
 	this.stopXmit = function() { this.xmitting = false; }
 
 	this.isXmit = function() { return this.xmitting; }
+
+	this.div = undefined;
+
+	this.updateHTML = function() {
+	    this.div.innerHTML = this.getFrequency() + " / " + this.getDescription();
+	};
     };
 
     function channelFrom(d) {
@@ -39,43 +45,67 @@ var channelboard = (function() {
 	    if (c.isControl()) chan_class = "channel_status_control";
 
 	    var curdiv = document.createElement("div");
+
+	    c.div = curdiv;
+
 	    curdiv.classList.add(chan_class);
 	    if (!c.isControl()) curdiv.classList.add("channel_xmit_unknown");
 	    curdiv.id = "channel_status_" + c.getFrequency();
 
-	    curdiv.innerHTML = c.getFrequency() + "/" + c.getDepartment() + "/" + c.getDescription();
-
+	    c.updateHTML();
 	    this.channel_divs.push(curdiv);
 
 	    this.div.append(curdiv);
 	}
 
 
-
-	this.channelStart = function(freq) {
+	this.channelIndex = function(freq) {
 	    for (var i = 0; i < this.channels.length; i++) {
 		if (this.channels[i].frequency == freq) {
-		    if (this.channels[i].isControl()) return;
-
-		    this.channel_divs[i].classList.remove("channel_xmit_unknown");
-		    this.channel_divs[i].classList.remove("channel_xmit_noxmit");
-		    this.channel_divs[i].classList.add("channel_xmit_inxmit");
+		    return i;
 		}
 	    }
-	}
+	    return -1;
+	};
+
+	this.channelStart = function(freq) {
+	    var i = this.channelIndex(freq);
+	    if (-1 == i) return;
+
+	    if (this.channels[i].isControl()) return;
+
+	    this.channel_divs[i].classList.remove("channel_xmit_unknown");
+	    this.channel_divs[i].classList.remove("channel_xmit_noxmit");
+	    this.channel_divs[i].classList.add("channel_xmit_inxmit");
+
+	    if (this.channels[i].getDescription() == "-idle-") {
+		this.channels[i].description = "????";
+		this.channels[i].updateHTML();
+	    }
+	};
 
 
 	this.channelStop = function(freq) {
-	    for (var i = 0; i < this.channels.length; i++) {
-		if (this.channels[i].frequency == freq) {
-		    if (this.channels[i].isControl()) return;
+	    var i = this.channelIndex(freq);
+	    if (-1 == i) return;
+	    if (this.channels[i].isControl()) return;
 
-		    this.channel_divs[i].classList.remove("channel_xmit_unknown");
-		    this.channel_divs[i].classList.remove("channel_xmit_inxmit");
-		    this.channel_divs[i].classList.add("channel_xmit_noxmit");
-		}
-	    }
-	}
+	    this.channel_divs[i].classList.remove("channel_xmit_unknown");
+	    this.channel_divs[i].classList.remove("channel_xmit_inxmit");
+	    this.channel_divs[i].classList.add("channel_xmit_noxmit");
+
+	    this.channels[i].description = "-idle-";
+	    this.channels[i].updateHTML();
+	};
+
+	this.channelTag = function(freq, tg) {
+	    var i = this.channelIndex(freq);
+	    if (-1 == i) return;
+	    if (this.channels[i].isControl()) return;
+
+	    this.channels[i].description = tg;
+	    this.channels[i].updateHTML();
+	};
 
     };
 

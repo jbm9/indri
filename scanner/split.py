@@ -104,11 +104,11 @@ class recording_channelizer(gr.top_block):
 
         def started_cb(x):
             # print "Start: %s" % str(x)
-            unirest.get(self.base_url + "%d-start/1" % x, callback=lambda r: "Isn't that nice.")
+            unirest.get(self.base_url + "start/%d" % x, callback=lambda r: "Isn't that nice.")
 
         def stop_cb(x):
             # print " Stop: %s" % str(x)
-            unirest.get(self.base_url + "%d-stop/1" % x, callback=lambda r: "Isn't that nice.")
+            unirest.get(self.base_url + "stop/%d" % x, callback=lambda r: "Isn't that nice.")
 
 
 
@@ -146,6 +146,8 @@ class recording_channelizer(gr.top_block):
                     print "UNK** %s" % str(s)
                 else:
                     print "tun: %s" % str(s)
+                    if self.base_url:
+                        unirest.get(self.base_url + "tune/%d/%d" % (tunefreq, s["idno"]), callback=lambda r: "Isn't that nice.")
 
 
         def print_skipped(n):

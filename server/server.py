@@ -7,12 +7,28 @@ class PostHandler(web.RequestHandler):
     def get(self, args):
         print "get(%s)" % args
 
-        froms, tos = args.split("/")
+        arglist = args.split("/")
+        msgtype = arglist[0]
+        msgargs = arglist[1:]
 
-        msg = { "type": "click", "target2": tos, "sender": froms }
+        msg = None
+
+        if msgtype == "start":
+            freq = msgargs[0]
+            msg = { "type": msgtype, "freq": freq }
+        elif msgtype == "stop":
+            freq = msgargs[0]
+            msg = { "type": msgtype, "freq": freq }
+        elif msgtype == "tune":
+            freq = msgargs[0]
+            tg = msgargs[1]
+            msg = { "type": msgtype, "freq": freq, "tg": tg }
 
         self.write( str(args) )
-        self.__send_to_connections(msg)
+        self.write( str(msg) )
+
+        if msg:
+            self.__send_to_connections(msg)
 
 
 
