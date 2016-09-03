@@ -1,9 +1,20 @@
-.skel
+indri
 =====
 
-This is a skeleton project.  It needs better documentation.
+Indri implements an SDR-based public service scanner with a
+web front-end.
+
+Copyright (c) 2016 Josh Myer <josh@joshisanerd.com>
+License: GPL v2
+
+
+A lot of the smartnet decoding (and the channel and talkgroup tables)
+is based on gr-smartnet by Nick Foster.  This code is all written from
+scratch, though, so any errors or omissions are probably mine.
+
 
 Contents:
 
-web/ -- An empty website for this thing
-code/ -- An empty directory for code for this thing
+scanner/ -- the actual scanner radio front-end
+server/ -- the websocket server that lives between the scanner and the user
+webclient/ -- the website front-end for the scanner output
