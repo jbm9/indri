@@ -3,6 +3,39 @@ import logging
 
 from tornado import ioloop, web, websocket
 
+
+class ChannelStates:
+    def __init__(self):
+        self.channels = {} # freq => [open/closed, TG]
+
+    def lookup(self, freq):
+        if not freq in self.channels:
+            self.channels[freq] = ["unk", 0]
+
+    def open(self, freq):
+        self.lookup(freq)
+        self.channels[freq][0] = "open"
+
+    def close(self, freq):
+        self.lookup(freq)
+        self.channels[freq][0] = "closed"
+        self.channels[freq][1] = 0
+
+
+    def tag(self, freq, tg):
+        self.lookup(freq)
+        self.channels[freq][1] = tg
+
+    def get_states(self):
+        retval = []
+        for freq in self.channels:
+            d = { "freq": freq, "state": self.channels[freq][0], "tg": self.channels[freq][1] }
+            retval.append(d)
+
+        return retval
+
+g_channel_states = ChannelStates()
+
 class PostHandler(web.RequestHandler):
     def get(self, args):
         print "get(%s)" % args
@@ -16,13 +49,18 @@ class PostHandler(web.RequestHandler):
         if msgtype == "start":
             freq = msgargs[0]
             msg = { "type": msgtype, "freq": freq }
+            g_channel_states.open(freq)
+
         elif msgtype == "stop":
             freq = msgargs[0]
             msg = { "type": msgtype, "freq": freq }
+            g_channel_states.close(freq)
+
         elif msgtype == "tune":
             freq = msgargs[0]
             tg = msgargs[1]
             msg = { "type": msgtype, "freq": freq, "tg": tg }
+            g_channel_states.tag(freq, tg)
 
         self.write( str(args) )
         self.write( str(msg) )
@@ -63,25 +101,9 @@ class WebSocketServer(websocket.WebSocketHandler):
         self.write_message(json.dumps({
                 'type': 'connected',
                 'id': self.connection_id,
+            'states': g_channel_states.get_states()
                 }))
 
-        # Connection events
-        for each_id, each_connection in self.application.connections.iteritems():
-
-            # Notify all clients of new connection
-            each_connection.write_message(json.dumps({
-                    'type': 'connection',
-                    'id': self.connection_id,
-                    'clients': len(self.application.connections),
-                    }))
-
-            # Notify current client of all existing connections
-            if each_id < self.connection_id:
-                self.write_message(json.dumps({
-                        'type': 'connection',
-                        'id': each_id,
-                        'clients': len(self.application.connections),
-                        }))
 
     def on_message(self, message):
         try:

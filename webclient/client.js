@@ -32,6 +32,18 @@ connection.onmessage = function (e) {
 	case "start": channelboard.channelStart(response.freq); break;
 	case "stop":  channelboard.channelStop(response.freq); break;
 	case "tune":  channelboard.channelTag(response.freq, response.tg); break;
+	case "connected":
+	   var dump = response.states;
+	   for (var i = 0; i < dump.length; i++) {
+	       var cs = dump[i];
+
+	       if (cs.state == "open") {
+		   channelboard.channelStart(cs.freq);
+		   if (cs.tg != 0) channelboard.channelTag(cs.freq, cs.tg);
+	       } else if(cs.state == "closed") {
+		   channelboard.channelStop(cs.freq);
+	       }
+	   }
     };
 
 };
