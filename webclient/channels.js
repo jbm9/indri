@@ -108,7 +108,10 @@ var channelboard = (function() {
 	    this.channel_divs[i].classList.remove("channel_xmit_inxmit");
 	    this.channel_divs[i].classList.add("channel_xmit_noxmit");
 
-	    this.channels[i].description = "-idle-";
+	    var newdesc = "-idle-";
+	    if (this.channels[i].description.length && this.channels[i].description != "-idle-") newdesc += " (" + this.channels[i].description + ")";
+
+	    this.channels[i].description = newdesc;
 	    this.channels[i].updateHTML();
 	};
 
