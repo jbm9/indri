@@ -4,6 +4,8 @@
 
 .channel_xmit_noxmit { 
     background-color: #ccc; 
+    color: #777;
+    font-size: smaller;
 }
 
 .channel_xmit_inxmit { 
