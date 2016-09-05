@@ -277,7 +277,7 @@ class recording_channelizer(gr.top_block):
                 audio_source = self.attach_audio_channel(f_i, i)
                 self.attach_voice_finals(f_i, audio_source)
 
-                if f_i == 851400000:
+                if f_i == 851400000 or f_i == 851425000:
                     self.attach_control_finals(f_i, audio_source)
 
             else:
