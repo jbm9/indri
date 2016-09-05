@@ -128,6 +128,16 @@ class recording_channelizer(gr.top_block):
 
     def attach_control_finals(self, f_i, audio_source):
         print "attach control finals: %d" % f_i
+
+
+        # Figure out where zero should be, despite RTL-SDR drift
+        avglen = 1000 # should be big enough to catch drifts
+        offset = blocks.moving_average_ff(avglen, 1.0/avglen, 40*avglen)
+        differential = blocks.sub_ff()
+        self.connect(audio_source, (differential,0))
+        self.connect(audio_source, offset)
+        self.connect(offset, (differential,1))
+
         rational_resampler = gr_filter.rational_resampler_fff(
             interpolation=36,
             decimation=125,
@@ -159,7 +169,7 @@ class recording_channelizer(gr.top_block):
         snj = smartnet_janky(time.time(), print_pkt, print_skipped, print_cksum_err)
 
         print "Control set up"
-        self.connect(audio_source, rational_resampler, slicer, snj)
+        self.connect(differential, rational_resampler, slicer, snj)
 
     def __init__(self, channels=None, samp_rate=2400000, Fc=852700000, base_url=None, threshold=-50, correction=0):
         gr.top_block.__init__(self, "Splitter")
