@@ -127,49 +127,35 @@ class recording_channelizer(gr.top_block):
 
 
     def attach_control_finals(self, f_i, audio_source):
-        print "attach control finals: %d" % f_i
-
-
-        # Figure out where zero should be, despite RTL-SDR drift
-        avglen = 1000 # should be big enough to catch drifts
-        offset = blocks.moving_average_ff(avglen, 1.0/avglen, 40*avglen)
-        differential = blocks.sub_ff()
-        self.connect(audio_source, (differential,0))
-        self.connect(audio_source, offset)
-        self.connect(offset, (differential,1))
-
-        rational_resampler = gr_filter.rational_resampler_fff(
-            interpolation=36,
-            decimation=125,
-            taps=None,
-            fractional_bw=None,
-        )
-
-
-        slicer = digital.binary_slicer_fb()
-
+        self.control_counts[f_i] = { "tun": 0, "unk": 0, "err": 0, "skip": 0 }
+        
         def print_pkt(s):
             cmd = int(s["cmd"], 16)
             if 0x2d0 >= cmd:
                 tunefreq = 851012500 + 25000*cmd
                 if self.channels and tunefreq not in self.channels:
-                    print "UNK** %s" % str(s)
+                    #print "UNK** %s" % str(s)
+                    self.control_counts[f_i]["unk"] += 1
+                    if tunefreq not in self.unk_counts:
+                        self.unk_counts[tunefreq] = 0
+                    self.unk_counts[tunefreq] += 1
                 else:
-                    print "tun: %s" % str(s)
+                    #print "tun: %s" % str(s)
+                    self.control_counts[f_i]["tun"] += 1
                     if self.base_url:
                         unirest.get(self.base_url + "tune/%d/%d" % (tunefreq, s["idno"]), callback=lambda r: "Isn't that nice.")
 
 
         def print_skipped(n):
+            self.control_counts[f_i]["skip"] += 1
             return # print "skip: %f / %d" % (time.time(), n)
 
         def print_cksum_err(s):
-            print "   ** err: %s" % str(s)
+            self.control_counts[f_i]["err"] += 1
+            # print "   ** err: %s" % str(s)
 
-        snj = smartnet_janky(time.time(), print_pkt, print_skipped, print_cksum_err)
+        smartnet_attach_control_dsp(self, audio_source, time.time(), print_pkt, print_skipped, print_cksum_err)
 
-        print "Control set up"
-        self.connect(differential, rational_resampler, slicer, snj)
 
     def __init__(self, channels=None, samp_rate=2400000, Fc=852700000, base_url=None, threshold=-50, correction=0):
         gr.top_block.__init__(self, "Splitter")
@@ -198,6 +184,10 @@ class recording_channelizer(gr.top_block):
         self.gain_bb = 20
 
         self.freq_corr = correction
+
+        self.control_counts = {} # freq => counts of control types
+
+        self.unk_counts = {} # freq => counts
 
         def channelizer_frequency(i):
             if i > n_channels/2:
@@ -346,9 +336,17 @@ if __name__ == '__main__':
     tb = recording_channelizer(channels, options.samp_rate, options.freq, options.url, options.threshold, options.correction)
     tb.start()
 
+    cycles = 0
     while True:
         time.sleep(1)
         tb.check_time_triggers()
+
+        cycles += 1
+        if 0 == (cycles % 3):
+            print "CONTROLS W/MEAN: %d %s" % (time.time(), str(tb.control_counts))
+
+            print
+            print "Unks: %s" % (str(tb.unk_counts))
 
     try:
         raw_input('Press Enter to quit: ')

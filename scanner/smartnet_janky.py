@@ -1,6 +1,17 @@
 import numpy
 from gnuradio import gr
 
+from gnuradio import blocks
+from gnuradio import analog
+from gnuradio import digital
+from gnuradio import filter as gr_filter
+from gnuradio import eng_notation
+from gnuradio import gr
+from gnuradio.eng_option import eng_option
+from gnuradio.filter import firdes
+from gnuradio.filter import pfb
+
+
 
 class smartnet_janky(gr.sync_block):
     PREAMBLE = [1,0,1,0,1,1,0,0]
@@ -193,6 +204,34 @@ class smartnet_janky(gr.sync_block):
                 self.skipped_cb(preamble_at)
             # print "\tSkipped: %d" % preamble_at
             return preamble_at
+
+def smartnet_attach_control_dsp(top_block, audio_source, t0, pkt_cb, skip_cb, cksum_cb):
+
+
+        # Figure out where zero should be, despite RTL-SDR drift
+        avglen = 1000 # should be big enough to catch drifts
+        offset = blocks.moving_average_ff(avglen, 1.0/avglen, 40*avglen)
+        differential = blocks.sub_ff()
+        top_block.connect(audio_source, (differential,0))
+        top_block.connect(audio_source, offset)
+        top_block.connect(offset, (differential,1))
+
+        rational_resampler = gr_filter.rational_resampler_fff(
+            interpolation=36,
+            decimation=125,
+            taps=None,
+            fractional_bw=None,
+        )
+
+
+        slicer = digital.binary_slicer_fb()
+        snj = smartnet_janky(t0, pkt_cb, skip_cb, cksum_cb)
+
+        top_block.connect(differential, rational_resampler, slicer, snj)
+
+
+    
+
 
 
 def smartnet_pkt_print(g):
