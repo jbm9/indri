@@ -78,12 +78,10 @@ class smartnet_janky(gr.sync_block):
         for j in range(len(errors)-1):
             if errors[j]:
                 if errors[j+1]:
-                    # print "Flipping info %d" % j
                     i[j] ^= 1
                     errors[j+1] = 0
                     flips += 1
                 else:
-                    #      print "Flipping parity %d" % j
                     k[j] ^= 1
                     flips += 1
 
@@ -151,7 +149,12 @@ class smartnet_janky(gr.sync_block):
         cmd ^= 0x32A
         idno ^= 0x33C7
 
-        return { "cmd": "%x" % cmd, "group": group, "idno": idno, "cksum": cksum, "cksum_e": cksum_expected }
+        retval = { "cmd": "%x" % cmd, "group": group, "idno": idno, "cksum": cksum, "cksum_e": cksum_expected }
+
+        #if cksum != cksum_expected:
+        #    retval["pkt"] = pkt
+
+        return retval
 
 
 
@@ -177,7 +180,6 @@ class smartnet_janky(gr.sync_block):
             return len(inbuf)
 
         if 0 == preamble_at:
-            # print "ZERO: %d: %s" % (len(inbuf), "".join(map(str, inbuf[:8])))
             g = self._parse(inbuf[:self.FRAME_LEN])
 
             if g is None:
@@ -195,6 +197,9 @@ class smartnet_janky(gr.sync_block):
                 if self.cksum_err_cb:
                     self.cksum_err_cb(g)
                 #print g
+                if self.skipped_cb:
+                    self.skipped_cb(1)
+
                 self.nsamples += 1
                 return 1
 
@@ -205,7 +210,7 @@ class smartnet_janky(gr.sync_block):
             # print "\tSkipped: %d" % preamble_at
             return preamble_at
 
-def smartnet_attach_control_dsp(top_block, audio_source, t0, pkt_cb, skip_cb, cksum_cb):
+def smartnet_attach_control_dsp(top_block, audio_source, t0, pkt_cb, skip_cb, cksum_cb, interpolation=36, decimation=125):
 
 
         # Figure out where zero should be, despite RTL-SDR drift
@@ -217,10 +222,10 @@ def smartnet_attach_control_dsp(top_block, audio_source, t0, pkt_cb, skip_cb, ck
         top_block.connect(offset, (differential,1))
 
         rational_resampler = gr_filter.rational_resampler_fff(
-            interpolation=36,
-            decimation=125,
+            interpolation=interpolation,
+            decimation=decimation,
             taps=None,
-            fractional_bw=None,
+            fractional_bw=0.45,
         )
 
 
