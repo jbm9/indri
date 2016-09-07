@@ -35,11 +35,15 @@ from optparse import OptionParser
 
 from wavheader import wave_header, wave_fixup_length
 
+from collections import defaultdict
+
 import unirest
 
 import osmosdr
 import time
 import os
+
+import json
 
 from timestamp_file_sink import timestamp_file_sink
 from time_trigger import time_trigger
@@ -56,7 +60,7 @@ class recording_channelizer(gr.top_block):
             audio_rate=self.chan_rate,
             quad_rate=self.chan_rate,
             tau=75e-6,
-            max_dev=5e3,
+            max_dev=2.5e3,
         )
 
 
@@ -127,12 +131,45 @@ class recording_channelizer(gr.top_block):
 
 
     def attach_control_finals(self, f_i, audio_source):
-        self.control_counts[f_i] = { "tun": 0, "unk": 0, "err": 0, "skip": 0 }
+        self.control_counts[f_i] = { "tun": 0, "unk": 0, "err": 0, "skip": 0, "oth": 0 }
         
         def print_pkt(s):
             cmd = int(s["cmd"], 16)
+
+            self.cmd_file.write(json.dumps(s) + "\n")
+
+            self.cmd_counts[cmd] += 1
+
+
+            def decode_frequency_rebanded(cmd):
+                # Based on http://home.ica.net/~phoenix/wap/TRUNK88/Motorola%20Channel%20Numbers.txt
+                if cmd <= 0x1B7:
+                    return 851012500 + 25000*cmd
+                if cmd <= 0x22F:
+                    return 851025000 + 25000*cmd
+                if cmd <= 0x2CF:
+                    return 865012500 + 25000*cmd
+                if cmd <= 0x2F7:
+                    return 866000000 + 25000*cmd
+                if cmd <= 0x32E:
+                    return 0 # Bogon
+                if cmd <= 0x33F:
+                    return 867000000 + 25000*cmd
+                if cmd <= 0x3BD:
+                    return 0 # Bogon
+                if cmd == 0x3BE:
+                    return 868975000
+                if cmd <= 0x3C0:
+                    return 0
+                if cmd <= 0x3FE:
+                    return 867425000 + 25000*cmd
+                if cmd == 0x3FF:
+                    return 0
+
+                return 0
+
             if 0x2d0 >= cmd:
-                tunefreq = 851012500 + 25000*cmd
+                tunefreq = decode_frequency_rebanded(cmd)
                 if self.channels and tunefreq not in self.channels:
                     #print "UNK** %s" % str(s)
                     self.control_counts[f_i]["unk"] += 1
@@ -144,20 +181,24 @@ class recording_channelizer(gr.top_block):
                     self.control_counts[f_i]["tun"] += 1
                     if self.base_url:
                         unirest.get(self.base_url + "tune/%d/%d" % (tunefreq, s["idno"]), callback=lambda r: "Isn't that nice.")
+            else:
+                self.control_counts[f_i]["oth"] += 1
 
 
         def print_skipped(n):
             self.control_counts[f_i]["skip"] += 1
+            self.cmd_file.write(json.dumps({"skip": n}) + "\n")
             return # print "skip: %f / %d" % (time.time(), n)
 
         def print_cksum_err(s):
             self.control_counts[f_i]["err"] += 1
+            self.cmd_file.write(json.dumps({"err": 1}) + "\n")
             # print "   ** err: %s" % str(s)
 
         smartnet_attach_control_dsp(self, audio_source, time.time(), print_pkt, print_skipped, print_cksum_err)
 
 
-    def __init__(self, channels=None, samp_rate=2400000, Fc=852700000, base_url=None, threshold=-50, correction=0):
+    def __init__(self, channels=None, samp_rate=2400000, Fc=852700000, base_url=None, threshold=-50, correction=0, gain=10):
         gr.top_block.__init__(self, "Splitter")
 
 
@@ -179,13 +220,18 @@ class recording_channelizer(gr.top_block):
         self.base_url = base_url
 
 
-        self.gain = 10     # TODO expose gain settings at CLI
-        self.gain_if = 20
-        self.gain_bb = 20
+        self.gain = gain
+        self.gain_if = 0
+        self.gain_bb = 0
 
         self.freq_corr = correction
 
         self.control_counts = {} # freq => counts of control types
+
+        self.cmd_counts = defaultdict(int) # cmd => N
+
+        self.cmd_file = file("/tmp/commandstream", "a")
+        self.cmd_file.write("null\n")
 
         self.unk_counts = {} # freq => counts
 
@@ -322,6 +368,7 @@ if __name__ == '__main__':
     parser.add_option("-u", "--url", help="Server base URL", default=None)
     parser.add_option("-t", "--threshold", help="Squelch threshold on audio channels, dB", default=-50, type=int)
     parser.add_option("-o", "--correction", help="Correction offset, PPM", default=0, type=int)
+    parser.add_option("-g", "--gain", help="Gain, dB", default=10, type=int)
 
     (options, args) = parser.parse_args()
 
@@ -333,7 +380,7 @@ if __name__ == '__main__':
         channels = map(int, filter(None, lines))
         f.close()
 
-    tb = recording_channelizer(channels, options.samp_rate, options.freq, options.url, options.threshold, options.correction)
+    tb = recording_channelizer(channels, options.samp_rate, options.freq, options.url, options.threshold, options.correction, options.gain)
     tb.start()
 
     cycles = 0
@@ -342,11 +389,25 @@ if __name__ == '__main__':
         tb.check_time_triggers()
 
         cycles += 1
-        if 0 == (cycles % 3):
+        if False and 0 == (cycles % 3):
+            print
             print "CONTROLS W/MEAN: %d %s" % (time.time(), str(tb.control_counts))
 
             print
             print "Unks: %s" % (str(tb.unk_counts))
+
+            print
+
+
+
+            print "cmds: %s" % str(tb.cmd_counts)
+
+            cmdids = tb.cmd_counts.keys()
+            cmdids.sort(key = lambda c: -1*tb.cmd_counts[c])
+            for cmd in cmdids[:15]:
+                print "    0x%x: %d" % (cmd, tb.cmd_counts[cmd])
+
+            print
 
     try:
         raw_input('Press Enter to quit: ')
