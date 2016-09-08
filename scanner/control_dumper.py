@@ -46,8 +46,6 @@ elif path.endswith("wav"):
 
 def print_pkt(pkt):
     #print "pkt: " + str(s)
-    pkt["cmd"] = int(pkt["cmd"], 16)
-    
     unhandled = decoder.handle_packet(pkt)
 
 #    if unhandled:

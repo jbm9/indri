@@ -175,7 +175,7 @@ class smartnet_janky(gr.sync_block):
         cmd ^= 0x32A
         idno ^= 0x33C7
 
-        retval = { "cmd": "%x" % cmd, "group": group, "idno": idno, "cksum": cksum, "cksum_e": cksum_expected }
+        retval = { "cmd": cmd, "group": group, "idno": idno, "cksum": cksum, "cksum_e": cksum_expected }
 
         #if cksum != cksum_expected:
         #    retval["pkt"] = pkt
