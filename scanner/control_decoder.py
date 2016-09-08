@@ -209,7 +209,7 @@ class ControlDecoder:
     def handle_group_call_grant(self, pkt):
         radio_id = self.stack[0]["idno"]
         channel = pkt["cmd"]
-        tg = pkt["idno"] >> 4
+        tg = pkt["idno"]
 
         self._do_cb("group_call_grant", radio_id, channel, tg)
         self._idle()
@@ -269,7 +269,7 @@ class ControlDecoder:
 
 
     def handle_channel(self, pkt):
-        tg = pkt["idno"] >> 4
+        tg = pkt["idno"]
         chan = pkt["cmd"]
         self._do_cb("group_call", chan, tg)
 
