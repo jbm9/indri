@@ -122,10 +122,13 @@ var channelboard = (function() {
 
 	    var tgent = decodeTalkGroup(tg);
 
+	    var tg_base = tg - (tg % 16);
+	    var tg_flag = tg % 16;
+
 	    if (tgent) {
-		this.channels[i].description = tg + "/" + tgent.category + "/" + tgent.long;
+		this.channels[i].description = tg_base.toString(16) + "(" + tg_flag + ")" + "/" + tgent.category + "/" + tgent.long;
 	    } else {
-		this.channels[i].description = tg;
+		this.channels[i].description = tg_base.toString(16) + "(" + tg_flag + ")";
 	    }
 	    this.channels[i].updateHTML();
 	};

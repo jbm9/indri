@@ -23,15 +23,24 @@ connection.onerror = function (error) {
   console.log('WebSocket Error ' + error);
 };
 
+var tg_follow = [ 0x3270, 0x3290 ];
+
 // Log messages from the server
 connection.onmessage = function (e) {
   var response = JSON.parse(e.data);
-  console.log('Server: ' + e.data);
+    // console.log('Server: ' + e.data);
 
     switch(response.type) {
 	case "start": channelboard.channelStart(response.freq); break;
 	case "stop":  channelboard.channelStop(response.freq); break;
 	case "tune":  channelboard.channelTag(response.freq, response.tg); break;
+	case "tgfile": 
+	  if ((-1 == tg_follow) || (-1 != tg_follow.indexOf(parseInt(response.tg))))
+	      scanner_player.enqueue("/scanner/" + response.path);
+	else
+	    console.log("No hit on tg=" + parseInt(response.tg));
+
+          break;
 	case "connected":
 	   var dump = response.states;
 	   for (var i = 0; i < dump.length; i++) {
