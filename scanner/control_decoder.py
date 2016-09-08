@@ -22,6 +22,7 @@ class ControlDecoder:
     CMD_ANY = 0xFFFF # wildcard command
     CMD_CHANNEL = 0xFFFE # any command that's a channel allocation
 
+    CMD_SITE_ID = 0xFFFD # commands 360~39F, inclusive
 
     def __init__(self):
         self.state = self.STATE_IDLE
@@ -31,6 +32,11 @@ class ControlDecoder:
 
         self._handlers = [
             #  state,         cmd, group, handler
+
+            # 360 ~ 39F: Site ID
+            [ self.STATE_ANY,   self.CMD_SITE_ID, 1, self.handle_site_id ],
+
+            [ self.STATE_ANY,   0x3A0, 1, self.handle_diagnostic ],
 
             # 2F8: Idle
             [ self.STATE_ANY,           0x2F8,        0, self.handle2F8i ],            
@@ -53,6 +59,7 @@ class ControlDecoder:
             [ self.STATE_IN_308_G, self.CMD_CHANNEL,  1, self.handle_group_call_grant ],
 
 
+
             #####
             # 309: affiliation/deaffiliation
             [ self.STATE_ANY,           0x309,        0, self.handle309i ],
@@ -63,6 +70,11 @@ class ControlDecoder:
 
             # 308: Private call grant
             [ self.STATE_IN_309_I, self.CMD_CHANNEL,  0, self.handle_private_call ],
+
+            # 308: 319: Page signal sent
+            [ self.STATE_IN_309_I, 0x319, 0, self.handle_page_sent ],
+            [ self.STATE_IN_309_I, 0x31a, 0, self.handle_page_ack ],
+
 
             #####
             # System status announcements
@@ -88,6 +100,10 @@ class ControlDecoder:
 
             if pkt["cmd"] == command or self.CMD_ANY == command:
                 return handler(pkt)
+
+            if self.CMD_SITE_ID == command:
+                if pkt["cmd"] >= 0x360 and pkt["cmd"] <= 0x39F:
+                    return handler(pkt)
 
             if self.CMD_CHANNEL == command:
                 if self._is_channel(pkt["cmd"]):
@@ -136,9 +152,21 @@ class ControlDecoder:
             return True
         return False
 
+
+    def handle_site_id(self, pkt):
+        site_id = pkt["cmd"] - 0x360
+        idno = pkt["idno"]
+        self._do_cb("site_id", site_id, idno)
+        # no idle: this can interrupt other stuff
+
+    def handle_diagnostic(self, pkt):
+        diagnostic_code = pkt["idno"]
+        self._do_cb("diagnostic", diagnostic_code)
+
+
     def handle2F8i(self, pkt):
         self._do_cb("idle")
-        self._idle()
+        # no idle: this can interrupt other stuff
 
     def handle308g0(self, pkt):
         self.stack = [pkt]
@@ -207,12 +235,32 @@ class ControlDecoder:
         self._idle()
 
 
+    def handle_page_sent(self, pkt):
+        dest_radio_id = self.stack[0]["idno"]
+        src_radio_id = pkt["idno"]
+
+        self._do_cb("page_sent", src_radio_id, dest_radio_id)
+        self._idle()
+
+
+    def handle_page_ack(self, pkt):
+        dest_radio_id = self.stack[0]["idno"]
+        src_radio_id = pkt["idno"]
+
+        self._do_cb("page_ack", src_radio_id, dest_radio_id)
+        self._idle()
+
     def handle3BFx(self, pkt):
-        self._do_cb("net_status", pkt["group"], pkt["idno"])
+        opcode = pkt["idno"] >> 13
+        value = pkt["idno"] & 0x1FFF;
+        self._do_cb("net_status", pkt["group"], opcode, value)
         self._idle()
 
     def handle3C0g(self, pkt):
-        self._do_cb("system_status", pkt["idno"])
+        opcode = pkt["idno"] >> 13
+        value = pkt["idno"] & 0x1FFF;
+        self._do_cb("system_status", pkt["group"], opcode, value)
+
         self._idle()
 
 
