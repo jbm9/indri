@@ -62,6 +62,12 @@ class PostHandler(web.RequestHandler):
             msg = { "type": msgtype, "freq": freq, "tg": tg }
             g_channel_states.tag(freq, tg)
 
+        elif msgtype == "tgfile":
+            tg = msgargs[0]
+            path = "/".join(msgargs[1:])
+
+            msg = { "type": "tgfile", "tg": tg, "path": path }
+
         self.write( str(args) )
         self.write( str(msg) )
 
