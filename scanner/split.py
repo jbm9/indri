@@ -50,6 +50,7 @@ from time_trigger import time_trigger
 
 
 from smartnet_janky import *
+from control_decoder import ControlDecoder
 
 class recording_channelizer(gr.top_block):
     def attach_audio_channel(self, f_i, i):
@@ -60,7 +61,7 @@ class recording_channelizer(gr.top_block):
             audio_rate=self.chan_rate,
             quad_rate=self.chan_rate,
             tau=75e-6,
-            max_dev=2.5e3,
+            max_dev=5e3,
         )
 
 
@@ -79,9 +80,9 @@ class recording_channelizer(gr.top_block):
 
         scanpath = "scanner/%d/" % self.run_time
 
-        print "#"
-        print "# Output dir: %s" % scanpath
-        print "#"
+        #print "#"
+        #print "# Output dir: %s" % scanpath
+        #print "#"
 
         try:
             os.makedirs(scanpath)
@@ -100,10 +101,20 @@ class recording_channelizer(gr.top_block):
 
         pattern = "%s/audio_%d_%%s.wav" % (scanpath, f_i)
 
+        self.user_data[f_i] = { "tg": None }
+
         wav_header = wave_header(1, 8000, 8, 0)
 
-        def wave_fixup_cb(fd, n_samples):
+        def wave_fixup_cb(fd, n_samples, path):
             wave_fixup_length(fd)
+            tg = 0
+
+            if self.user_data[f_i]["tg"]:
+                tg = self.user_data[f_i]["tg"]
+                self.user_data[f_i]["tg"] = None
+            print "\t\tClosed out talkgroup message, tg=%04x (%d) / %s" % (tg, tg, path)
+
+            unirest.get(self.base_url + "tgfile/%d/%s" % (tg, path))
 
 
         def started_cb(x):
@@ -131,43 +142,46 @@ class recording_channelizer(gr.top_block):
 
 
     def attach_control_finals(self, f_i, audio_source):
-        self.control_counts[f_i] = { "tun": 0, "unk": 0, "err": 0, "skip": 0, "oth": 0 }
-        
-        def print_pkt(s):
-            cmd = int(s["cmd"], 16)
+        control_decoder = ControlDecoder()
 
-            self.cmd_file.write(json.dumps(s) + "\n")
-
-            self.cmd_counts[cmd] += 1
-
-            if 0x2d0 >= cmd:
-                tunefreq = decode_frequency_rebanded(cmd)
-                if self.channels and tunefreq not in self.channels:
-                    #print "UNK** %s" % str(s)
-                    self.control_counts[f_i]["unk"] += 1
-                    if tunefreq not in self.unk_counts:
-                        self.unk_counts[tunefreq] = 0
-                    self.unk_counts[tunefreq] += 1
-                else:
-                    #print "tun: %s" % str(s)
-                    self.control_counts[f_i]["tun"] += 1
-                    if self.base_url:
-                        unirest.get(self.base_url + "tune/%d/%d" % (tunefreq, s["idno"]), callback=lambda r: "Isn't that nice.")
-            else:
-                self.control_counts[f_i]["oth"] += 1
+        def print_cb(cbname, args):
+            print "%s: %s" % (cbname, str(args))
 
 
-        def print_skipped(n):
-            self.control_counts[f_i]["skip"] += 1
-            self.cmd_file.write(json.dumps({"skip": n}) + "\n")
-            return # print "skip: %f / %d" % (time.time(), n)
+        def group_call_cb(chan, tg):
+            freq = decode_frequency_rebanded(chan)
 
-        def print_cksum_err(s):
-            self.control_counts[f_i]["err"] += 1
-            self.cmd_file.write(json.dumps({"err": 1}) + "\n")
-            # print "   ** err: %s" % str(s)
+            if self.base_url:
+                unirest.get(self.base_url + "tune/%d/%d" % (freq, tg), callback=lambda r: "Isn't that nice.")
 
-        smartnet_attach_control_dsp(self, audio_source, time.time(), print_pkt, print_skipped, print_cksum_err)
+            if freq in self.user_data:
+                self.user_data[freq]["tg"] = tg
+
+        control_decoder.register_cb("group_call", group_call_cb)
+        # control_decoder.register_cb("*", print_cb)
+
+        def pkt_cb(pkt):
+            # print "pkt: %s" % str(pkt)
+            s = str(control_decoder)
+            unh = control_decoder.handle_packet(pkt)
+            if unh:
+                print "unhandled: %03x/%d: %s / %s" % (pkt["cmd"], pkt["group"], str(s), str(pkt))
+
+        def skipped_cb(n):
+            #print "skip: %d" % n
+            control_decoder.handle_skip(n)
+
+        def cksum_err_cb(pkt):
+            #print "cksum:"
+            control_decoder.handle_cksum_err(pkt)
+
+
+        snj = smartnet_attach_control_dsp(self,
+                                          audio_source,
+                                          time.time(),
+                                          pkt_cb,
+                                          skipped_cb,
+                                          cksum_err_cb)
 
 
     def __init__(self, channels=None, samp_rate=2400000, Fc=852700000, base_url=None, threshold=-50, correction=0, gain=10):
@@ -198,14 +212,7 @@ class recording_channelizer(gr.top_block):
 
         self.freq_corr = correction
 
-        self.control_counts = {} # freq => counts of control types
-
-        self.cmd_counts = defaultdict(int) # cmd => N
-
-        self.cmd_file = file("/tmp/commandstream", "a")
-        self.cmd_file.write("null\n")
-
-        self.unk_counts = {} # freq => counts
+        self.user_data = {} # freq => misc metdata (used here for talkgroup)
 
         def channelizer_frequency(i):
             if i > n_channels/2:
@@ -355,31 +362,9 @@ if __name__ == '__main__':
     tb = recording_channelizer(channels, options.samp_rate, options.freq, options.url, options.threshold, options.correction, options.gain)
     tb.start()
 
-    cycles = 0
     while True:
         time.sleep(1)
         tb.check_time_triggers()
-
-        cycles += 1
-        if False and 0 == (cycles % 3):
-            print
-            print "CONTROLS W/MEAN: %d %s" % (time.time(), str(tb.control_counts))
-
-            print
-            print "Unks: %s" % (str(tb.unk_counts))
-
-            print
-
-
-
-            print "cmds: %s" % str(tb.cmd_counts)
-
-            cmdids = tb.cmd_counts.keys()
-            cmdids.sort(key = lambda c: -1*tb.cmd_counts[c])
-            for cmd in cmdids[:15]:
-                print "    0x%x: %d" % (cmd, tb.cmd_counts[cmd])
-
-            print
 
     try:
         raw_input('Press Enter to quit: ')

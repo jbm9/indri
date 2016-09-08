@@ -47,6 +47,7 @@ class timestamp_file_sink(decim_block):
         self.path_pattern = path_pattern
         self.timeout = timeout
 
+        self.path = None
         self.fd = None
         self.last_sample = 0
         self.mode = mode
@@ -62,13 +63,15 @@ class timestamp_file_sink(decim_block):
         if dt > self.timeout:
             if None != self.fd:
                 if self.final_cb:
-                    self.final_cb(self.fd, self.file_samples)
+                    self.final_cb(self.fd, self.file_samples, self.path)
+                self.path = None
                 self.fd.close()
                 self.file_samples = 0
 
             path = datetime.datetime.now().strftime(self.path_pattern)
             print "Starting new file: last=%d, now=%d, new file=%s" % (self.last_sample, t, path)
 
+            self.path = path
             self.fd = file(path, self.mode)
             self.fd.write(self.header)
 
