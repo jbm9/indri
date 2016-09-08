@@ -90,6 +90,11 @@ class ControlDecoder:
         ]
 
 
+        self._idle()
+
+    def __str__(self):
+        return "state=%d, stack=%s" % (self.state, str(self.stack))
+
     def handle_packet(self, pkt):
         for initial_state, command, groupmask, handler in self._handlers:
             if self.STATE_ANY != initial_state and self.state != initial_state:
@@ -108,7 +113,6 @@ class ControlDecoder:
             if self.CMD_CHANNEL == command:
                 if self._is_channel(pkt["cmd"]):
                     return handler(pkt)
-
 
         self._idle()
         return "Unhandled!"
