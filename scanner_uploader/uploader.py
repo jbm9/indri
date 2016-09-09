@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     path = sys.argv[1] if len(sys.argv) > 1 else '.'
     observer = Observer()
-    handler = UploaderEventHandler(bucket, 'http://localhost:8081/post/')
+    handler = UploaderEventHandler(bucket, 'http://52.43.290.23:8081/post/')
     observer.schedule(handler, path, recursive=True)
     observer.start()
     try:
