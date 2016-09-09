@@ -1,6 +1,7 @@
 var scanner_player = (function() {
   function ScannerPlayer() {
-      var queue = [];
+      var backlog = []; // enqueued-but-unavailable files
+      var queue = []; // actual playlist
 
 
       var playing = false;
@@ -19,7 +20,10 @@ var scanner_player = (function() {
       }
       window.addEventListener("touchend", ios_unlock_sound, false);
 
-      var play = function(url) {
+      var play = function(entry) {
+
+	  var url = "http://indri-testbed.s3-website-us-west-2.amazonaws.com/" + entry.filename;
+
 	  console.info("play: " + url);
 	  playing = true;
 
@@ -59,11 +63,38 @@ var scanner_player = (function() {
       }
 
       
-      this.enqueue = function(url) {
-	  console.log("Enqueue at " + queue.length + ": " + url);
-	  queue.push(url);
-	  if (!playing) play_next();
+      this.enqueue = function(tg,filename) {
+	  console.log("Enqueue at " + queue.length + ": " + filename);
+
+	  var entry = { "filename": filename,
+			"tg": tg,
+			"available": false };
+
+	  backlog.push(entry);
       };
+
+      this.available = function(filename) {
+	  var entry_to_play = null;
+
+
+	  console.log("available: " + filename);
+
+	  for (var i = 0; !entry_to_play && i < backlog.length; i++) {
+	      if (filename == backlog[i].filename) {
+		  backlog[i].available = true;
+		  entry_to_play = backlog[i];
+		  var newbacklog = backlog.filter(function(e,i,a) { return !e.available;});
+		  backlog = newbacklog;
+	      }
+	  }
+
+
+	  if (entry_to_play) {
+	      queue.push(entry_to_play);
+	      if (!playing) play_next();
+	  }
+
+      }
   };
 
 

@@ -25,6 +25,17 @@ connection.onerror = function (error) {
 
 var tg_follow = [ 0x3270, 0x3290 ];
 
+function handle_tgfile(response) {
+	  if ((-1 == tg_follow) || (-1 != tg_follow.indexOf(parseInt(response.tg))))
+	      scanner_player.enqueue(response.tg, response.path);
+	else
+	    console.log("No hit on tg=" + parseInt(response.tg));
+}
+
+function handle_fileup(response) {
+    scanner_player.available(response.path);
+}
+
 // Log messages from the server
 connection.onmessage = function (e) {
   var response = JSON.parse(e.data);
@@ -34,12 +45,8 @@ connection.onmessage = function (e) {
 	case "start": channelboard.channelStart(response.freq); break;
 	case "stop":  channelboard.channelStop(response.freq); break;
 	case "tune":  channelboard.channelTag(response.freq, response.tg); break;
-	case "tgfile": 
-	  if ((-1 == tg_follow) || (-1 != tg_follow.indexOf(parseInt(response.tg))))
-	      scanner_player.enqueue("/scanner/" + response.path);
-	else
-	    console.log("No hit on tg=" + parseInt(response.tg));
-
+	case "tgfile": handle_tgfile(response); break;
+	case "fileup": handle_fileup(response); break;
           break;
 	case "connected":
 	   var dump = response.states;
