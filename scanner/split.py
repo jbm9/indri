@@ -108,7 +108,7 @@ class recording_channelizer(gr.top_block):
             newpath = "%s/%s" % (options.dest_path, filename)
             os.rename(path, newpath)
 
-            unirest.get(self.base_url + "tgfile/%d/%s" % (tg, newpath))
+            unirest.get(self.base_url + "tgfile/%d/%s" % (tg, filename))
 
 
         def started_cb(x):
@@ -181,7 +181,7 @@ class recording_channelizer(gr.top_block):
     def __init__(self, channels=None, samp_rate=2400000, Fc=852700000, base_url=None, threshold=-50, correction=0, gain=10):
 
         samp_rate = options.samp_rate
-        freq = options.freq
+        Fc = options.freq
         base_url = options.url
         threshold = options.threshold
         correction = options.correction
@@ -223,11 +223,13 @@ class recording_channelizer(gr.top_block):
                 return Fc - (n_channels - i)*chan_rate
             return Fc + i*chan_rate
 
+        all_freqs = map(channelizer_frequency, range(n_channels))
+
 
         print "#"
         print "#"
 
-        print "# Starting up scanner: Fs=%d, Fchan=%d, n_chan=%d, threshold=%d" % (samp_rate, chan_rate, n_channels, threshold)
+        print "# Starting up scanner: Fs=%d, Fc=%d, %d~%d,Fchan=%d, n_chan=%d, threshold=%d" % (samp_rate, Fc, min(all_freqs), max(all_freqs), chan_rate, n_channels, threshold)
         if channels:
             missing_channels = set(channels)
             skipped_channels = 0
