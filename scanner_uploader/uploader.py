@@ -42,6 +42,7 @@ class UploaderEventHandler(watchdog.events.FileSystemEventHandler):
                 k = Key(self.b)
                 k.key = filename
                 k.set_contents_from_filename(evt.src_path)
+                k.set_acl("public-read")
                 unirest.get(self.base_url + "fileup/%s/%s" % (self.bucketname, filename))
 
                 print "Uploaded"
