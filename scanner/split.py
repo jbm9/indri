@@ -78,17 +78,6 @@ class recording_channelizer(gr.top_block):
             fractional_bw=None,
         )
 
-        scanpath = "scanner/%d/" % self.run_time
-
-        #print "#"
-        #print "# Output dir: %s" % scanpath
-        #print "#"
-
-        try:
-            os.makedirs(scanpath)
-        except:
-            pass
-
         f_bias = blocks.add_const_ff(1.0)
         f_scale = blocks.multiply_const_ff(125.0)
         f_to_char = blocks.float_to_uchar()
@@ -99,7 +88,7 @@ class recording_channelizer(gr.top_block):
                      f_bias,f_scale,f_to_char)
 
 
-        pattern = "%s/audio_%d_%%s.wav" % (scanpath, f_i)
+        pattern = "%s/audio_%d_%%s.wav" % (options.incoming_path, f_i)
 
         self.user_data[f_i] = { "tg": None }
 
@@ -112,9 +101,14 @@ class recording_channelizer(gr.top_block):
             if self.user_data[f_i]["tg"]:
                 tg = self.user_data[f_i]["tg"]
                 self.user_data[f_i]["tg"] = None
+
             print "\t\tClosed out talkgroup message, tg=%04x (%d) / %s" % (tg, tg, path)
 
-            unirest.get(self.base_url + "tgfile/%d/%s" % (tg, path))
+            filename = path.split("/")[-1]
+            newpath = "%s/%s" % (options.dest_path, filename)
+            os.rename(path, newpath)
+
+            unirest.get(self.base_url + "tgfile/%d/%s" % (tg, newpath))
 
 
         def started_cb(x):
@@ -185,6 +179,16 @@ class recording_channelizer(gr.top_block):
 
 
     def __init__(self, channels=None, samp_rate=2400000, Fc=852700000, base_url=None, threshold=-50, correction=0, gain=10):
+
+        samp_rate = options.samp_rate
+        freq = options.freq
+        base_url = options.url
+        threshold = options.threshold
+        correction = options.correction
+        gain = options.gain
+
+
+
         gr.top_block.__init__(self, "Splitter")
 
 
@@ -348,8 +352,22 @@ if __name__ == '__main__':
     parser.add_option("-t", "--threshold", help="Squelch threshold on audio channels, dB", default=-50, type=int)
     parser.add_option("-o", "--correction", help="Correction offset, PPM", default=0, type=int)
     parser.add_option("-g", "--gain", help="Gain, dB", default=10, type=int)
+    parser.add_option("-i", "--incoming-path", help="Temporary incoming path to use", default="scanner/incoming")
+    parser.add_option("-d", "--dest-path", help="Destination path to use", default="scanner/upload")
 
     (options, args) = parser.parse_args()
+
+    try:
+        os.makedirs(options.incoming_path)
+    except:
+        pass
+
+    try:
+        os.makedirs(options.dest_path)
+    except:
+        pass
+
+
 
 
     channels = None
@@ -359,7 +377,7 @@ if __name__ == '__main__':
         channels = map(int, filter(None, lines))
         f.close()
 
-    tb = recording_channelizer(channels, options.samp_rate, options.freq, options.url, options.threshold, options.correction, options.gain)
+    tb = recording_channelizer(channels, options)
     tb.start()
 
     while True:
