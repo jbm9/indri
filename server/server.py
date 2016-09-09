@@ -24,7 +24,12 @@ class ChannelStates:
 
     def tag(self, freq, tg):
         self.lookup(freq)
+        old_tg = self.channels[freq][1]
         self.channels[freq][1] = tg
+
+        if self.channels[freq][0] == "open" and tg == old_tg:
+            return False
+        return True
 
     def get_states(self):
         retval = []
@@ -60,13 +65,21 @@ class PostHandler(web.RequestHandler):
             freq = msgargs[0]
             tg = msgargs[1]
             msg = { "type": msgtype, "freq": freq, "tg": tg }
-            g_channel_states.tag(freq, tg)
+            if not g_channel_states.tag(freq, tg):
+                msg = None # scrub this, it's a dupe.
 
         elif msgtype == "tgfile":
             tg = msgargs[0]
             path = "/".join(msgargs[1:])
 
             msg = { "type": "tgfile", "tg": tg, "path": path }
+
+        elif msgtype == "fileup":
+            bucket = msgargs[0]
+            path = "/".join(msgargs[1:])
+
+            msg = { "type": "fileup", "bucket": bucket, "path": path }
+
 
         self.write( str(args) )
         self.write( str(msg) )
