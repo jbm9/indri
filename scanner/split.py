@@ -71,6 +71,17 @@ class recording_channelizer(gr.top_block):
         return nbfm_rx
 
     def attach_voice_finals(self, f_i, audio_source):
+
+
+        bpf_taps = firdes.band_pass(1, 12500,
+                                    500.0, 2000.0, 100,
+                                    firdes.WIN_HAMMING,
+                                    6.76)
+
+        bpf = gr_filter.fir_filter_fff(1, bpf_taps)
+
+        agc = analog.agc_ff(1e-5, 0.7, 1.0)
+
         rational_resampler = gr_filter.rational_resampler_fff(
             interpolation=16,
             decimation=25,
@@ -84,6 +95,8 @@ class recording_channelizer(gr.top_block):
 
 
         self.connect(audio_source,
+                     bpf,
+                     agc,
                      rational_resampler,
                      f_bias,f_scale,f_to_char)
 
@@ -102,7 +115,13 @@ class recording_channelizer(gr.top_block):
                 tg = self.user_data[f_i]["tg"]
                 self.user_data[f_i]["tg"] = None
 
-            print "\t\tClosed out talkgroup message, tg=%04x (%d) / %s" % (tg, tg, path)
+            if n_samples < self.min_burst:
+                print "\t\tTOO SHORT: talkgroup message, N=%d, tg=%04x (%d) / %s" % (n_samples, tg, tg, path)
+                os.remove(path)
+                return
+
+
+            print "\t\tClosed out talkgroup message, N=%d, tg=%04x (%d) / %s" % (n_samples, tg, tg, path)
 
             filename = path.split("/")[-1]
             newpath = "%s/%s" % (options.dest_path, filename)
@@ -188,6 +207,7 @@ class recording_channelizer(gr.top_block):
         gain = options.gain
 
 
+        self.min_burst = 8000*options.min_burst
 
         gr.top_block.__init__(self, "Splitter")
 
@@ -306,10 +326,11 @@ class recording_channelizer(gr.top_block):
 
             if None == channels or f_i in channels:
                 audio_source = self.attach_audio_channel(f_i, i)
-                self.attach_voice_finals(f_i, audio_source)
 
                 if f_i == 851400000 or f_i == 851425000:
                     self.attach_control_finals(f_i, audio_source)
+                else:
+                    self.attach_voice_finals(f_i, audio_source)
 
             else:
                 null_sink = blocks.null_sink(gr.sizeof_gr_complex)
@@ -356,6 +377,7 @@ if __name__ == '__main__':
     parser.add_option("-g", "--gain", help="Gain, dB", default=10, type=int)
     parser.add_option("-i", "--incoming-path", help="Temporary incoming path to use", default="scanner/incoming")
     parser.add_option("-d", "--dest-path", help="Destination path to use", default="scanner/upload")
+    parser.add_option("-m", "--min-burst", help="Minimum burst duration, seconds", default=2.0, type=float)
 
     (options, args) = parser.parse_args()
 
