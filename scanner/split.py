@@ -56,7 +56,7 @@ class recording_channelizer(gr.top_block):
     def attach_audio_channel(self, f_i, i):
         chain = []
 
-        pwr_squelch = analog.pwr_squelch_cc(self.threshold, 0.0001, 0, True)
+        pwr_squelch = analog.pwr_squelch_cc(self.threshold, 0.001, 0, True)
         nbfm_rx = analog.nbfm_rx(
             audio_rate=self.chan_rate,
             quad_rate=self.chan_rate,
