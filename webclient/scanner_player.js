@@ -6,8 +6,16 @@ var scanner_player = (function() {
 
       var playing = false;
 
-      var sysac = audioContext = window.Audiocontext || window.webkitAudioContext;
+      var sysac = audioContext = window.AudioContext || window.webkitAudioContext;
       var context = new sysac();
+
+      var uidiv = null; // <div> for our UI
+
+      var talkgroups = {}; // our talkgroup database
+
+      var base_url = "http://localhost/"; // base of all WAV urls
+
+      this.setBaseURL = function(u) { base_url = u; }
 
       // kludge to allow this to work in ios
       function ios_unlock_sound(event) {
@@ -21,8 +29,9 @@ var scanner_player = (function() {
       window.addEventListener("touchend", ios_unlock_sound, false);
 
       var play = function(entry) {
+	  var url = base_url + entry.filename;
 
-	  var url = "http://indri-testbed.s3-website-us-west-2.amazonaws.com/" + entry.filename;
+	  set_current_tg("(loading) " + entry.tg);
 
 	  console.info("play: " + url);
 	  playing = true;
@@ -45,6 +54,7 @@ var scanner_player = (function() {
 
 		  source.connect(context.destination);
 		  source.start(0);
+		  set_current_tg(entry.tg);
               },
 					   function(e) { alert("Audio decode error: " + e) }
 					  );
@@ -59,6 +69,7 @@ var scanner_player = (function() {
 	      play(queue.shift());
 	  } else {
 	      playing = false;
+	      set_current_tg(null);
 	  }
       }
 
@@ -92,9 +103,66 @@ var scanner_player = (function() {
 	  if (entry_to_play) {
 	      queue.push(entry_to_play);
 	      if (!playing) play_next();
+	  }	  
+      }
+
+
+      function decode_tg(tg) {
+	  var e = talkgroups[tg];
+	  if (e)
+	      return e.short + "/" + e.long;
+	  return "(unk)";
+      }
+
+      var set_current_tg = function(s) {
+	  var curtg = uidiv.find(".current_tg");
+	  console.log(curtg);
+	  if (null == s) {
+	      curtg.text("-idle-");
+	      curtg.css("background-color", "#ccc")
+	  } else {
+	      var decode = decode_tg(s);
+	      curtg.text("TG-" + parseInt(s).toString(16) + " " + decode);
+	      curtg.css("background-color", "#ecc")
 	  }
+      }
+
+
+
+      var setup_ui = function() {
+	  if (!uidiv) return;
+
+	  var tgdisplay = document.createElement("div");
+	  var newlabel = document.createElement("span");
+	  newlabel.textContent = "Now playing:";
+	  tgdisplay.appendChild(newlabel);
+
+	  var curtg = document.createElement("span");
+	  curtg.classList.add("current_tg");
+	  tgdisplay.appendChild(curtg);
+
+	  uidiv.append(tgdisplay);
+
+
+	  set_current_tg(null);
 
       }
+
+
+      this.initUI = function(uidiv_in) {
+	  uidiv = uidiv_in;
+
+	  setup_ui();
+      }
+
+
+      this.initTalkGroups = function(tgs_in) {
+	  var i;
+	  for (i = 0; i < tgs_in.length; i++) {
+	      var e = tgs_in[i];
+	      talkgroups[e.tg] = e;
+	  }
+      };
   };
 
 

@@ -13,6 +13,8 @@
 <body>
 
   <div id="channelboard"></div>
+  <div id="nowplaying"></div>
+  <div id="connstatus"></div>
 
   <script src="./vendor/jquery.min.js"></script>
   <script src="./vendor/custom.modernizr.js"></script>
@@ -20,9 +22,74 @@
   <script>
     $(document).foundation();
   </script>
+
+  <script src="./talkgroups.js"></script>
   <script src="./scanner_player.js"></script>
   <script src="./channels.js"></script>
+
+  <script src="./scanner_connection.js"></script>
   
-  <script src="./client.js"></script>
+  <script language="javascript">
+    var hostname = document.location.hostname;
+
+    // scanner_player.setBaseURL("http://indri-testbed.s3-website-us-west-2.amazonaws.com/");
+    scanner_player.setBaseURL("/scanner/scanner/archive//");
+    scanner_player.initUI($("#nowplaying"));
+    scanner_player.initTalkGroups(tgs);
+
+
+    var scanner_connection = new ScannerConnection();
+
+    function handle_connected(response) {
+	   var dump = response.states;
+	   for (var i = 0; i < dump.length; i++) {
+	       var cs = dump[i];
+
+	       if (cs.state == "open") {
+		   channelboard.channelStart(cs.freq);
+		   if (cs.tg != 0) channelboard.channelTag(cs.freq, cs.tg);
+	       } else if(cs.state == "closed") {
+		   channelboard.channelStop(cs.freq);
+	       }
+	   }
+    }
+
+
+    var tg_follow = [ 0x3270, 0x3290 ];			      
+
+    function handle_tgfile(response) {
+	  if ((-1 == tg_follow) || (-1 != tg_follow.indexOf(parseInt(response.tg))))
+	      scanner_player.enqueue(response.tg, response.path);
+     //	else
+     //	    console.log("No hit on tg=" + parseInt(response.tg));
+    }
+
+    function handle_fileup(response) {
+      scanner_player.available(response.path);
+    }
+
+    scanner_connection.attachUI($("#connstatus"));
+    scanner_connection.register("start", function(response) { channelboard.channelStart(response.freq); });
+    scanner_connection.register("stop", function(response) { channelboard.channelStop(response.freq); });
+    scanner_connection.register("tune", function(response) { channelboard.channelTag(response.freq, response.tg); });
+    scanner_connection.register("tgfile", handle_tgfile);
+    scanner_connection.register("fileup", handle_fileup);
+    scanner_connection.register("connected", handle_connected);
+    scanner_connection.register("levels", channelboard.channelLevels);
+
+    function scanner_reconnect() {
+      scanner_connection.connect(hostname);
+    }
+
+    scanner_connection.register("_CLOSE_", 
+			       function() { 
+			         window.setTimeout(scanner_reconnect, 4000);
+                               });
+
+    scanner_connection.connect(hostname);
+    scanner_connection.updateUI();
+    window.setInterval(scanner_connection.updateUI, 500);
+    
+  </script>
 </body>
 </html>

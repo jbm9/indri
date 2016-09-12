@@ -28,8 +28,8 @@ var tg_follow = [ 0x3270, 0x3290 ];
 function handle_tgfile(response) {
 	  if ((-1 == tg_follow) || (-1 != tg_follow.indexOf(parseInt(response.tg))))
 	      scanner_player.enqueue(response.tg, response.path);
-	else
-	    console.log("No hit on tg=" + parseInt(response.tg));
+//	else
+//	    console.log("No hit on tg=" + parseInt(response.tg));
 }
 
 function handle_fileup(response) {

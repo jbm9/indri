@@ -1,3 +1,8 @@
+body {
+    margin-left: 1em;
+    margin-right: 1em;
+}
+
 .channel_xmit_unknown { 
     background-color: #888; 
 }
@@ -14,4 +19,11 @@
 
 .channel_status_control {
     background-color: #cc9;
+}
+
+
+#nowplaying {
+//    background-colilor: blue;
+    width: 20em;
+    height: 10ex;
 }
