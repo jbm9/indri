@@ -22,6 +22,8 @@
 # other decoding, you can do it downstream of each channel's squelch.
 
 
+import math
+import gnuradio
 from gnuradio import blocks
 from gnuradio import analog
 from gnuradio import digital
@@ -37,6 +39,8 @@ from wavheader import wave_header, wave_fixup_length
 
 from collections import defaultdict
 
+
+import urllib2
 import unirest
 
 import osmosdr
@@ -63,6 +67,17 @@ class recording_channelizer(gr.top_block):
             tau=75e-6,
             max_dev=5e3,
         )
+
+
+        power_probe = gnuradio.analog.probe_avg_mag_sqrd_cf(self.threshold, 0.001)
+        null_sink = blocks.null_sink(gr.sizeof_float)
+
+        self.mags[f_i] = power_probe
+        self.squelch[f_i] = pwr_squelch
+
+        self.connect((self.pfb_channelizer_ccf_0, i),
+                     power_probe,
+                     null_sink)
 
 
         self.connect((self.pfb_channelizer_ccf_0, i),
@@ -95,8 +110,8 @@ class recording_channelizer(gr.top_block):
 
 
         self.connect(audio_source,
-                     bpf,
-                     agc,
+                     #bpf,
+                     #agc,
                      rational_resampler,
                      f_bias,f_scale,f_to_char)
 
@@ -127,18 +142,17 @@ class recording_channelizer(gr.top_block):
             newpath = "%s/%s" % (options.dest_path, filename)
             os.rename(path, newpath)
 
-            unirest.get(self.base_url + "tgfile/%d/%s" % (tg, filename))
+            msg = { "type": "tgfile", "tg": tg, "path": filename }
 
+            self._submit(msg)
 
         def started_cb(x):
             # print "Start: %s" % str(x)
-            unirest.get(self.base_url + "start/%d" % x, callback=lambda r: "Isn't that nice.")
+            self._submit({"type": "start", "freq": x})
 
         def stop_cb(x):
             # print " Stop: %s" % str(x)
-            unirest.get(self.base_url + "stop/%d" % x, callback=lambda r: "Isn't that nice.")
-
-
+            self._submit({"type": "stop", "freq": x})
 
         ttrig = time_trigger(self.holdoff, started_cb, stop_cb, f_i)
         self.time_triggers.append(ttrig)
@@ -164,8 +178,7 @@ class recording_channelizer(gr.top_block):
         def group_call_cb(chan, tg):
             freq = decode_frequency_rebanded(chan)
 
-            if self.base_url:
-                unirest.get(self.base_url + "tune/%d/%d" % (freq, tg), callback=lambda r: "Isn't that nice.")
+            self._submit({"type": "tune", "freq": freq, "tg": tg})
 
             if freq in self.user_data:
                 self.user_data[freq]["tg"] = tg
@@ -181,11 +194,11 @@ class recording_channelizer(gr.top_block):
                 print "unhandled: %03x/%d: %s / %s" % (pkt["cmd"], pkt["group"], str(s), str(pkt))
 
         def skipped_cb(n):
-            #print "skip: %d" % n
+            # print "skip: %d" % n
             control_decoder.handle_skip(n)
 
         def cksum_err_cb(pkt):
-            #print "cksum:"
+            # print "cksum:"
             control_decoder.handle_cksum_err(pkt)
 
 
@@ -195,6 +208,19 @@ class recording_channelizer(gr.top_block):
                                           pkt_cb,
                                           skipped_cb,
                                           cksum_err_cb)
+
+    def _submit(self, event_body):
+        sub_json = json.dumps(event_body)
+        try:
+            unirest.get("%s/%s/%s" % (self.base_url,
+                                      "json",
+                                      event_body))
+        except urllib2.URLError, e:
+            print "URL upload error! %s" % e
+        except Exception, e:
+            print e
+            raise
+
 
 
     def __init__(self, channels=None, samp_rate=2400000, Fc=852700000, base_url=None, threshold=-50, correction=0, gain=10):
@@ -237,6 +263,9 @@ class recording_channelizer(gr.top_block):
         self.freq_corr = correction
 
         self.user_data = {} # freq => misc metdata (used here for talkgroup)
+
+        self.mags = {}    # freq => magnitude monitor
+        self.squelch = {} # freq => squelch
 
         def channelizer_frequency(i):
             if i > n_channels/2:
@@ -293,7 +322,7 @@ class recording_channelizer(gr.top_block):
         self.osmosdr_source_0.set_freq_corr(self.freq_corr, 0)
         self.osmosdr_source_0.set_dc_offset_mode(0, 0)
         self.osmosdr_source_0.set_iq_balance_mode(0, 0)
-        self.osmosdr_source_0.set_gain_mode(False, 0)
+        self.osmosdr_source_0.set_gain_mode(True, 0)
         self.osmosdr_source_0.set_gain(self.gain, 0)
         self.osmosdr_source_0.set_if_gain(self.gain_if, 0)
         self.osmosdr_source_0.set_bb_gain(self.gain_bb, 0)
@@ -366,6 +395,19 @@ class recording_channelizer(gr.top_block):
         self.pfb_channelizer_ccf_0.set_taps((self.lpf_taps))
 
 
+    def splat_levels(self):
+        levels = {}
+        for f_i in self.mags:
+            levels[f_i] = int(100*math.log10(self.mags[f_i].level()))/10.0
+
+        body = { "type": "levels", "levels": levels, "squelch": self.threshold }
+        self._submit(body)
+
+    def send_ping(self):
+        body = { "type": "ping", "ts": int(time.time()) }
+        self._submit(body)
+
+
 if __name__ == '__main__':
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
     parser.add_option("-c", "--channels", help="File containing channels list: will only emit these")
@@ -407,6 +449,10 @@ if __name__ == '__main__':
     while True:
         time.sleep(1)
         tb.check_time_triggers()
+        tb.splat_levels()
+        tb.send_ping()
+#        print [ int(100*math.log10(tb.mags[f_i].level()))/10.0 for f_i in sorted(list(tb.mags)) ]
+        print [ "***" if tb.squelch[f_i].unmuted() else "   "  for f_i in sorted(list(tb.mags)) ]
 
     try:
         raw_input('Press Enter to quit: ')
