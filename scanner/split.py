@@ -56,6 +56,14 @@ from time_trigger import time_trigger
 from smartnet_janky import *
 from control_decoder import ControlDecoder
 
+NCORES = 4
+
+
+def procaff(b, i):
+    procmask = [0] * NCORES
+    procmask[i%NCORES] = 1
+    b.set_processor_affinity(procmask)
+
 class recording_channelizer(gr.top_block):
     def attach_audio_channel(self, f_i, i):
         chain = []
@@ -83,9 +91,11 @@ class recording_channelizer(gr.top_block):
         self.connect((self.pfb_channelizer_ccf_0, i),
                      pwr_squelch, nbfm_rx)
 
+        procaff(nbfm_rx, i)
+
         return nbfm_rx
 
-    def attach_voice_finals(self, f_i, audio_source):
+    def attach_voice_finals(self, f_i, i, audio_source):
 
 
         bpf_taps = firdes.band_pass(1, 12500,
@@ -108,7 +118,11 @@ class recording_channelizer(gr.top_block):
         f_scale = blocks.multiply_const_ff(125.0)
         f_to_char = blocks.float_to_uchar()
 
-
+        procaff(rational_resampler, i)
+        procaff(f_bias, i)
+        procaff(f_scale, i)
+        procaff(f_to_char, i)
+        procaff(f_to_char, i)
         self.connect(audio_source,
                      #bpf,
                      #agc,
@@ -162,7 +176,8 @@ class recording_channelizer(gr.top_block):
                                          self.holdoff,
                                          header=wav_header,
                                          final_cb=wave_fixup_cb)
-
+        #procaff(afile_sink, i)
+        #procaff(ttrig, i)
         self.connect(f_to_char, afile_sink)
         self.connect(f_to_char, ttrig)
 
@@ -359,7 +374,7 @@ class recording_channelizer(gr.top_block):
                 if f_i == 851400000 or f_i == 851425000:
                     self.attach_control_finals(f_i, audio_source)
                 else:
-                    self.attach_voice_finals(f_i, audio_source)
+                    self.attach_voice_finals(f_i, i, audio_source)
 
             else:
                 null_sink = blocks.null_sink(gr.sizeof_gr_complex)
