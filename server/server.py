@@ -46,46 +46,19 @@ class PostHandler(web.RequestHandler):
     def get(self, args):
         print "get(%s)" % args
 
+        args = args.strip("/")
         arglist = args.split("/")
         msgtype = arglist[0]
         msgargs = arglist[1:]
 
+        if msgtype != "json":
+            print "bogon packet: %s" % msgtype
+            return
+
         msg = None
 
-        if msgtype == "start":
-            freq = msgargs[0]
-            msg = { "type": msgtype, "freq": freq }
-            g_channel_states.open(freq)
-
-        elif msgtype == "stop":
-            freq = msgargs[0]
-            msg = { "type": msgtype, "freq": freq }
-            g_channel_states.close(freq)
-
-        elif msgtype == "tune":
-            freq = msgargs[0]
-            tg = msgargs[1]
-            msg = { "type": msgtype, "freq": freq, "tg": tg }
-            if not g_channel_states.tag(freq, tg):
-                msg = None # scrub this, it's a dupe.
-
-        elif msgtype == "tgfile":
-            tg = msgargs[0]
-            path = "/".join(msgargs[1:])
-
-            msg = { "type": "tgfile", "tg": tg, "path": path }
-
-        elif msgtype == "fileup":
-            bucket = msgargs[0]
-            path = "/".join(msgargs[1:])
-
-            msg = { "type": "fileup", "bucket": bucket, "path": path }
-
-        elif msgtype == "json":
-            msg_body = "/".join(msgargs)
-            msg_body = tornado.escape.url_unescape(msg_body)
-            msg = json.loads(msg_body)
-
+        msg_body = "/".join(msgargs)
+        msg = json.loads(msg_body)
 
         self.write( str(args) )
         self.write( str(msg) )
@@ -97,19 +70,8 @@ class PostHandler(web.RequestHandler):
 
 
     def __send_to_connections(self, msg):
-        if 'target' in msg:
-            self.application.log.debug('sending from %s to %s: %s',
-                    msg.get('sender', None), msg['target'], msg)
-
-            self.application.connections[msg['target']].write_message(
-                    json.dumps(msg))
-
-        else:
-            self.application.log.debug('sending from %s to everyone: %s',
-                    msg.get('sender', None), msg)
-
-            for each_connection in self.application.connections.itervalues():
-                each_connection.write_message(json.dumps(msg))
+        for each_connection in self.application.connections.itervalues():
+            each_connection.write_message(json.dumps(msg))
 
 
 
