@@ -15,25 +15,35 @@ import boto
 from boto.s3.key import Key
 
 import unirest
+import urllib2
+
+from optparse import OptionParser
+
 
 bucket='indri-testbed'
 
 class UploaderEventHandler(watchdog.events.FileSystemEventHandler):
-    def __init__(self, bucketname, base_url, dest_path):
+    def __init__(self, bucketname, base_url, dest_path, no_upload, do_remove):
 
         self.bucketname = bucketname
-        self.bootstrap()
 
         self.dest_path = dest_path
         self.base_url = base_url
 
+        self.no_upload = no_upload
+        self.do_remove = do_remove
+
+        self.bootstrap()
+
+
     def bootstrap(self):
-        self.c = boto.connect_s3()
-        self.b = self.c.get_bucket(self.bucketname)
-        bucket_location = self.b.get_location()
-        if bucket_location:
-            self.c = boto.s3.connect_to_region(bucket_location)
+        if not self.no_upload:
+            self.c = boto.connect_s3()
             self.b = self.c.get_bucket(self.bucketname)
+            bucket_location = self.b.get_location()
+            if bucket_location:
+                self.c = boto.s3.connect_to_region(bucket_location)
+                self.b = self.c.get_bucket(self.bucketname)
         
     def dispatch(self, evt):
         try:
@@ -43,17 +53,30 @@ class UploaderEventHandler(watchdog.events.FileSystemEventHandler):
                 filename = path_components[-1]
 
                 try:
-                    new_path = self.dest_path + "/" + filename
-                    os.rename(evt.src_path, new_path)
+                    if self.dest_path != None:
+                        new_path = self.dest_path + "/" + filename
+                        os.rename(evt.src_path, new_path)
+                    elif self.do_remove:
+                        os.remove(evt.src_path)
                 except Exception, e:
                     print e
                     return
 
-                k = Key(self.b)
-                k.key = filename
-                k.set_contents_from_filename(new_path)
-                k.set_acl("public-read")
-                unirest.get(self.base_url + "fileup/%s/%s" % (self.bucketname, filename))
+                if self.no_upload:
+                    print "no upload: beep boop pretend to upload to S3, success!"
+                else:
+                    k = Key(self.b)
+                    k.key = filename
+                    k.set_contents_from_filename(new_path)
+                    k.set_acl("public-read")
+
+                try:
+                    unirest.get(self.base_url + "fileup/%s/%s" % (self.bucketname, filename))
+                except urllib2.URLError, e:
+                    print "URL upload error! %s" % e
+
+                except Exception, e:
+                    print e
 
                 print "Uploaded"
         except Exception, e:
@@ -61,11 +84,24 @@ class UploaderEventHandler(watchdog.events.FileSystemEventHandler):
 
 if __name__ == "__main__":
 
-    srcpath = sys.argv[1] if len(sys.argv) > 1 else '.'
-    destpath = sys.argv[2] if len(sys.argv) > 1 else None
+    parser = OptionParser(usage="%prog: [options]")
+    parser.add_option("-s", "--source-path", help="(required) Source path")
+    parser.add_option("-b", "--bucket", help="S3 bucket to upload to")
+    parser.add_option("-u", "--url", help="(required) URL of the API to notify clients")
+    parser.add_option("-d", "--dest-path", help="Destination path; if unused, doesn't move files")
+    parser.add_option("-n", "--no-upload", help="Don't actually upload", action="store_true", default=False)
+    parser.add_option("-r", "--remove", help="If no destination is provided, delete files instead of leaving in-situe", action="store_true", default=False)
+    (options, args) = parser.parse_args()
+
+    for o in [options.source_path, options.url]:
+        if not o:
+            print "All arguments except --dry-run are required, see --help for the list."
+            sys.exit(1)
+
+
     observer = Observer()
-    handler = UploaderEventHandler(bucket, 'http://52.43.230.29:8081/post/', destpath)
-    observer.schedule(handler, srcpath, recursive=True)
+    handler = UploaderEventHandler(options.bucket, options.url, options.dest_path, options.no_upload, options.remove)
+    observer.schedule(handler, options.source_path, recursive=True)
     observer.start()
     try:
         while True:
