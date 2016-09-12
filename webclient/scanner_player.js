@@ -6,8 +6,28 @@ var scanner_player = (function() {
 
       var playing = false;
 
+      var play_anything = false; // fill dead space
+
+      this.setPlayAnything = function(v) { play_anything = v; }
+
+
+
       var sysac = audioContext = window.AudioContext || window.webkitAudioContext;
       var context = new sysac();
+      var source = context.createBufferSource();
+
+      // kludge to allow this to work in ios
+      function ios_unlock_sound(event) {
+	  var buffer = context.createBuffer(1, 1, 22050);    
+	  source = context.createBufferSource();
+	  source.buffer = buffer;    
+	  source.connect(context.destination);    
+	  source.noteOn(0);    
+	  window.removeEventListener("touchend", ios_unlock_sound, false);
+      }
+
+      window.addEventListener("touchend", ios_unlock_sound, false);
+
 
       var uidiv = null; // <div> for our UI
 
@@ -15,18 +35,25 @@ var scanner_player = (function() {
 
       var base_url = "http://localhost/"; // base of all WAV urls
 
+      var paused = false;
+
       this.setBaseURL = function(u) { base_url = u; }
 
-      // kludge to allow this to work in ios
-      function ios_unlock_sound(event) {
-	  var buffer = context.createBuffer(1, 1, 22050);    
-	  var source = context.createBufferSource();    
-	  source.buffer = buffer;    
-	  source.connect(context.destination);    
-	  source.noteOn(0);    
-	  window.removeEventListener("touchend", ios_unlock_sound, false);
-      }
-      window.addEventListener("touchend", ios_unlock_sound, false);
+      var pause_unpause = function(cb) {
+	  if (!paused) {
+	      context.suspend().then(function() {
+		  paused = true;
+		  if (cb) cb(paused);
+	      });
+
+	  } else {
+	      context.resume().then(function() {
+		  paused = false;
+		  if (cb) cb(paused);
+	      });
+	  }
+      };
+      this.pauseUnpause = pause_unpause;
 
       var play = function(entry) {
 	  var url = base_url + entry.filename;
@@ -42,6 +69,10 @@ var scanner_player = (function() {
 	  request.responseType = "arraybuffer";
 
 	  request.onload = function() {
+	      if (request.status != 200) {
+		  console.log("Error fetching wav: status=" + request.status);
+	      }
+
 	      var bytes = request.response;
 
               context.decodeAudioData(bytes, function(buffer) {
@@ -56,7 +87,7 @@ var scanner_player = (function() {
 		  source.start(0);
 		  set_current_tg(entry.tg);
               },
-					   function(e) { alert("Audio decode error: " + e) }
+				 function(e) { console.log("Audio decode error: " + e); play_next(); }
 					  );
 	  };
 	  request.send();
@@ -65,6 +96,18 @@ var scanner_player = (function() {
 
       var play_next = function() {
 	  console.log("play_next: " + this );
+
+	  try {
+	      if (playing) source.stop();
+	  } catch(e) {
+	  }
+
+	  if (play_anything && 0 == queue.length && 0 != backlog.length) {
+	      var e = backlog.pop(); // yes, LIFO
+	      if (null == e.tg) e.tg = 0;
+	      queue.push(e);
+	  }
+
 	  if (queue.length) {
 	      play(queue.shift());
 	  } else {
@@ -74,7 +117,7 @@ var scanner_player = (function() {
       }
 
       
-      this.enqueue = function(tg,filename) {
+      this.enqueue = function(tg,filename, interesting) {
 	  var got_hit = false;
 	  for (var i = 0; i < backlog.length; i++) {
 
@@ -87,14 +130,14 @@ var scanner_player = (function() {
 	  }
 	  if (!got_hit) {
 	      console.log("Unqualified filename: " + filename);
-	      backlog.push({"filename": filename, "tg": tg, "available": false, "added": new Date()});
+	      backlog.push({"filename": filename, "tg": tg, "available": false, "added": new Date(), "interesting": interesting});
 	  }
 
 	  flushbacklog();
       };
 
       function flushbacklog() {
-	  var avails = backlog.filter(function(e,i,a) { return e.available; });
+	  var avails = backlog.filter(function(e,i,a) { return e.available && e.interesting; });
 
 	  var tCutoff = new Date() - 20000;
 	  var newbacklog = backlog.filter(function(e,i,a) { return !e.available && e.added > tCutoff; });
@@ -103,6 +146,7 @@ var scanner_player = (function() {
 	  for (var i = 0; i < avails.length; i++) queue.push(avails[i]);
 	  if (avails.length && !playing) play_next();
 
+	  if (play_anything && !playing) play_next();
       }
 
       this.available = function(filename) {
@@ -126,7 +170,7 @@ var scanner_player = (function() {
 
 
       function decode_tg(tg) {
-	  var e = talkgroups[tg];
+	  var e = talkgroups[tg - (tg%16)];
 	  if (e)
 	      return e.short + "/" + e.long;
 	  return "(unk)";
@@ -169,7 +213,25 @@ var scanner_player = (function() {
       this.initUI = function(uidiv_in) {
 	  uidiv = uidiv_in;
 
-	  setup_ui();
+	  var pause_button = uidiv.find("#playpause");
+	  pause_button.click(function() {
+	      pause_unpause(function(paused) {
+		  pause_button.text(paused ? "|>" : "||");
+	      });
+	  });
+
+
+	  var next_button = uidiv.find("#playnext");
+	  next_button.click(function() {
+	      play_next();
+	  });
+
+
+	  var any_button = uidiv.find("#playany");
+	  any_button.click(function() {
+	      play_anything = !play_anything;
+	      any_button.text(play_anything ? "*" : "_");
+	  });
       }
 
 

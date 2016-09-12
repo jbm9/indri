@@ -12,9 +12,14 @@
 </head>
 <body>
 
-  <div id="channelboard"></div>
-  <div id="nowplaying"></div>
   <div id="connstatus"></div>
+  <div id="nowplaying">
+    <span>Playing:</span><span class="current_tg">-idle-</span>
+    <button id="playpause">||</button>
+    <button id="playnext">-></button>
+    <button id="playany">_</button>
+  </div>
+  <div id="channelboard"></div>
 
   <script src="./vendor/jquery.min.js"></script>
   <script src="./vendor/custom.modernizr.js"></script>
@@ -32,8 +37,12 @@
   <script language="javascript">
     var hostname = document.location.hostname;
 
+    if ("tunability.local" == hostname) {
+      scanner_player.setBaseURL("/scanner/scanner/archive//");
+} else {
     scanner_player.setBaseURL("http://indri-testbed.s3-website-us-west-2.amazonaws.com/");
-    //scanner_player.setBaseURL("/scanner/scanner/archive//");
+}
+
     scanner_player.initUI($("#nowplaying"));
     scanner_player.initTalkGroups(tgs);
 
@@ -58,11 +67,9 @@
     var tg_follow = [ 0x3270, 0x3290 ];			      
 
     function handle_tgfile(response) {
-	  if ((-1 == tg_follow) || (-1 != tg_follow.indexOf(parseInt(response.tg))))
-	      scanner_player.enqueue(response.tg, response.path);
-     //	else
-     //	    console.log("No hit on tg=" + parseInt(response.tg));
-    }
+          scanner_player.enqueue(response.tg, response.path,
+			       (-1 == tg_follow) || (-1 != tg_follow.indexOf(parseInt(response.tg))));
+			       }
 
     function handle_fileup(response) {
       scanner_player.available(response.path);
@@ -91,5 +98,10 @@
     window.setInterval(scanner_connection.updateUI, 500);
     
   </script>
+
+
+<script>
+
+</script>
 </body>
 </html>
