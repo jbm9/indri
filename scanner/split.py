@@ -99,13 +99,13 @@ class recording_channelizer(gr.top_block):
 
 
         bpf_taps = firdes.band_pass(1, 12500,
-                                    500.0, 2000.0, 100,
+                                    300.0, 2000.0, 100,
                                     firdes.WIN_HAMMING,
                                     6.76)
 
         bpf = gr_filter.fir_filter_fff(1, bpf_taps)
 
-        agc = analog.agc_ff(1e-5, 0.7, 1.0)
+        agc = analog.agc_ff(1e-5, 0.9, 1.0)
 
         rational_resampler = gr_filter.rational_resampler_fff(
             interpolation=16,
@@ -122,10 +122,11 @@ class recording_channelizer(gr.top_block):
         procaff(f_bias, i)
         procaff(f_scale, i)
         procaff(f_to_char, i)
-        procaff(f_to_char, i)
+        procaff(bpf, i)
+        procaff(agc, i)
         self.connect(audio_source,
-                     #bpf,
-                     #agc,
+                     bpf,
+                     agc,
                      rational_resampler,
                      f_bias,f_scale,f_to_char)
 
