@@ -14,6 +14,7 @@ import watchdog.events
 import boto
 from boto.s3.key import Key
 
+import json
 import unirest
 import urllib2
 
@@ -71,7 +72,8 @@ class UploaderEventHandler(watchdog.events.FileSystemEventHandler):
                     k.set_acl("public-read")
 
                 try:
-                    unirest.get(self.base_url + "fileup/%s/%s" % (self.bucketname, filename))
+                    msg = { "type": "fileup", "bucket": self.bucketname, "path": filename }
+                    unirest.get(self.base_url + "json/%s" % (json.dumps(msg)), callback=lambda x: "Isn't that nice.")
                 except urllib2.URLError, e:
                     print "URL upload error! %s" % e
 
