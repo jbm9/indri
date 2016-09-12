@@ -31,6 +31,9 @@ function ScannerConnection() {
 	connection = new WebSocket("ws://" + hostname + ":8081");
 
 	connection.onopen = function() {
+	    console.log("Websocket connected");
+	    lastping = new Date(); // give it a freebie
+	    lastpkt = new Date();
 	}; // nothing for now
 
 	connection.onerror = function(error) {
@@ -72,11 +75,18 @@ function ScannerConnection() {
 	if (!uidiv) return;
 	var live_box = uidiv.find(".connection_live");
 
-	if (!connection || timeoutTriggered(5)) {
+	if (!connection || connection.readyState != 1) {
+	    live_box.css("background-color", "red")
+	    live_box.text(" -- Websocket connection not open ---")
+	    return;
+	}
+
+	if (timeoutTriggered(5)) {
 	    var tnow = new Date();
 	    if (tnow - lastpkt > 5) {
 		live_box.css("background-color", "red");
 	        live_box.text("Long delay:" + lastping);
+//		connection.close()
 	    } else
 		live_box.css("background-color", "yellow");
 	} else {
