@@ -96,7 +96,7 @@ class WebSocketServer(websocket.WebSocketHandler):
         try:
             msg = json.loads(message)
             msg['sender'] = self.connection_id
-            self.__send_to_connections(msg)
+            # self.__send_to_connections(msg)
 
         except Exception, e:
             self.write_message(json.dumps({
@@ -110,12 +110,13 @@ class WebSocketServer(websocket.WebSocketHandler):
 
         del self.application.connections[self.connection_id]
 
-        self.__send_to_connections({
+        if False:
+            self.__send_to_connections({
                 'type': 'closed',
                 'id': self.connection_id,
                 'clients': len(self.application.connections),
-                })
-        pass
+            })
+
 
     def __send_to_connections(self, msg):
         if 'target' in msg:
