@@ -229,7 +229,7 @@ class recording_channelizer(gr.top_block):
         try:
             unirest.get("%s/%s/%s" % (self.base_url,
                                       "json",
-                                      sub_json))
+                                      sub_json), callback=lambda s: "Isn't that nice.")
         except urllib2.URLError, e:
             print "URL upload error! %s" % e
         except Exception, e:
