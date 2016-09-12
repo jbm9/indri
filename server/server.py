@@ -80,6 +80,15 @@ class PostHandler(web.RequestHandler):
 
             msg = { "type": "fileup", "bucket": bucket, "path": path }
 
+        elif msgtype == "json":
+            msg_body = "/".join(msgargs)
+            print
+            print
+            print "body:" +  msg_body
+            print
+            print
+            msg = json.loads(msg_body)
+
 
         self.write( str(args) )
         self.write( str(msg) )
