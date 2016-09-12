@@ -75,35 +75,53 @@ var scanner_player = (function() {
 
       
       this.enqueue = function(tg,filename) {
-	  console.log("Enqueue at " + queue.length + ": " + filename);
+	  var got_hit = false;
+	  for (var i = 0; i < backlog.length; i++) {
 
-	  var entry = { "filename": filename,
-			"tg": tg,
-			"available": false };
-
-	  backlog.push(entry);
-      };
-
-      this.available = function(filename) {
-	  var entry_to_play = null;
-
-
-	  console.log("available: " + filename);
-
-	  for (var i = 0; !entry_to_play && i < backlog.length; i++) {
 	      if (filename == backlog[i].filename) {
+		  backlog[i].tg = tg;
 		  backlog[i].available = true;
-		  entry_to_play = backlog[i];
-		  var newbacklog = backlog.filter(function(e,i,a) { return !e.available;});
-		  backlog = newbacklog;
+		  got_hit = true;
+		  console.log("qualified filename: " + filename);
 	      }
 	  }
+	  if (!got_hit) {
+	      console.log("Unqualified filename: " + filename);
+	      backlog.push({"filename": filename, "tg": tg, "available": false, "added": new Date()});
+	  }
 
+	  flushbacklog();
+      };
 
-	  if (entry_to_play) {
-	      queue.push(entry_to_play);
-	      if (!playing) play_next();
-	  }	  
+      function flushbacklog() {
+	  var avails = backlog.filter(function(e,i,a) { return e.available; });
+
+	  var tCutoff = new Date() - 20000;
+	  var newbacklog = backlog.filter(function(e,i,a) { return !e.available && e.added > tCutoff; });
+	  backlog = newbacklog;
+
+	  for (var i = 0; i < avails.length; i++) queue.push(avails[i]);
+	  if (avails.length && !playing) play_next();
+
+      }
+
+      this.available = function(filename) {
+
+	  var got_hit = false;
+
+	  for (var i = 0; i < backlog.length; i++) {
+	      if (filename == backlog[i].filename) {
+		  backlog[i].available = true;
+		  got_hit = true;
+		  console.log("Got hit: " + filename);
+	      }
+	  }
+	  if (!got_hit) {
+	      console.log("available (" + backlog.length + "): " + filename);
+	      backlog.push({"filename": filename, "tg": null, "available": false, "added": new Date()});
+	  }
+
+	  flushbacklog();
       }
 
 
@@ -116,7 +134,6 @@ var scanner_player = (function() {
 
       var set_current_tg = function(s) {
 	  var curtg = uidiv.find(".current_tg");
-	  console.log(curtg);
 	  if (null == s) {
 	      curtg.text("-idle-");
 	      curtg.css("background-color", "#ccc")
