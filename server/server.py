@@ -2,6 +2,7 @@ import json
 import logging
 
 from tornado import ioloop, web, websocket
+import tornado.escape
 
 
 class ChannelStates:
@@ -82,11 +83,7 @@ class PostHandler(web.RequestHandler):
 
         elif msgtype == "json":
             msg_body = "/".join(msgargs)
-            print
-            print
-            print "body:" +  msg_body
-            print
-            print
+            msg_body = tornado.escape.url_unescape(msg_body)
             msg = json.loads(msg_body)
 
 
