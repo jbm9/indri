@@ -31,7 +31,7 @@ function ScannerConnection() {
 	connection = new WebSocket("ws://" + hostname + ":8081");
 
 	connection.onopen = function() {
-	    console.log("Websocket connected");
+	    console.log("Websocket connected: " + hostname);
 	    lastping = new Date(); // give it a freebie
 	    lastpkt = new Date();
 	}; // nothing for now
