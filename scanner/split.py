@@ -438,8 +438,6 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
 
-    print options
-
     if not options.config:
         print "Need a config file, -c indri.json"
         sys.exit(1)
