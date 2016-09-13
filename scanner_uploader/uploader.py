@@ -6,6 +6,12 @@
 
 import os
 import sys
+
+import os.path
+sys.path.append(os.path.dirname(__file__) + "/../lib") # TODO
+
+from indri_config import IndriConfig
+
 import time
 import logging
 from watchdog.observers import Observer
@@ -24,16 +30,13 @@ from optparse import OptionParser
 bucket='indri-testbed'
 
 class UploaderEventHandler(watchdog.events.FileSystemEventHandler):
-    def __init__(self, bucketname, base_url, dest_path, no_upload, do_remove):
+    def __init__(self, config):
+        self.base_url = config["websocket_uri"]
 
-        self.bucketname = bucketname
-
-        self.dest_path = dest_path
-        self.base_url = base_url
-
-        self.no_upload = no_upload
-        self.do_remove = do_remove
-
+        self.no_upload = config["upload"]["no_upload"]
+        self.dest_path = config["upload"]["out_path"]
+        self.bucketname = config["upload"]["bucket"]
+        self.do_remove = config["upload"]["do_remove"]
         self.bootstrap()
 
 
@@ -85,25 +88,31 @@ class UploaderEventHandler(watchdog.events.FileSystemEventHandler):
             print "Exception: %s" % str(e)
 
 if __name__ == "__main__":
-
     parser = OptionParser(usage="%prog: [options]")
-    parser.add_option("-s", "--source-path", help="(required) Source path")
-    parser.add_option("-b", "--bucket", help="S3 bucket to upload to")
-    parser.add_option("-u", "--url", help="(required) URL of the API to notify clients")
-    parser.add_option("-d", "--dest-path", help="Destination path; if unused, doesn't move files")
-    parser.add_option("-n", "--no-upload", help="Don't actually upload", action="store_true", default=False)
-    parser.add_option("-r", "--remove", help="If no destination is provided, delete files instead of leaving in-situe", action="store_true", default=False)
+    parser.add_option("-c", "--config", help="File containing config file")
+
     (options, args) = parser.parse_args()
 
-    for o in [options.source_path, options.url]:
-        if not o:
-            print "All arguments except --dry-run are required, see --help for the list."
-            sys.exit(1)
+    if not options.config:
+        print "Need a config file, -c indri.json"
+        sys.exit(1)
+
+
+    config = IndriConfig(options.config)
+    try:
+        os.makedirs(config["scanner"]["out_path"])
+    except:
+        pass
+
+    try:
+        os.makedirs(config["upload"]["out_path"])
+    except:
+        pass
 
 
     observer = Observer()
-    handler = UploaderEventHandler(options.bucket, options.url, options.dest_path, options.no_upload, options.remove)
-    observer.schedule(handler, options.source_path, recursive=True)
+    handler = UploaderEventHandler(config)
+    observer.schedule(handler, config["scanner"]["out_path"], recursive=True)
     observer.start()
     try:
         while True:
