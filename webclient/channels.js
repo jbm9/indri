@@ -1,188 +1,137 @@
-var channelboard = (function() {
-    function decodeTalkGroup(tg) {
-	var base_tg = tg - (tg % 16);
+function Channel(entry) {
+    var frequency = entry.freq;
+    var is_control = entry.is_control;
+    var name = entry.name;
+    var level = 0;
 
-	for (var i = 0; i < tgs.length; i++) {
-	    if (tgs[i].tg == base_tg) {
-		return tgs[i];
-	    }
-	}
-	return null;
+    var xmitting = false;
+
+    var uidiv = undefined;
+
+    var note = "";
+
+    this.getFrequency = function() { return frequency; }
+    this.isControl = function() { return is_control; }
+    this.getName = function() { return name; }
+
+    this.isXmit = function() { return xmitting; }
+
+
+    function updateUI() {
+	uidiv.innerHTML = frequency + 
+	    "(" + level + ")" + " / " +
+	    (xmitting ? "" : "-idle- (") + 
+	    note +
+	    (xmitting ? "" : ")");
+    };
+
+
+    this.attachUI = function(d) { uidiv = d; updateUI(); }
+
+    this.updateUI = updateUI;
+
+    this.setNote = function(n) { note = n; updateUI(); }
+    this.setLevel = function(l) { level = l; updateUI(); }
+
+    clear_xmit_status = function() {
+	uidiv.classList.remove("channel_xmit_unknown");
+	uidiv.classList.remove("channel_xmit_noxmit");
+	uidiv.classList.remove("channel_xmit_inxmit");
+    }
+
+    addClass = function(k) { uidiv.classList.add(k); }
+
+    this.startXmit = function() {
+	if (is_control) return;
+	clear_xmit_status();
+	xmitting = true;
+	addClass("channel_xmit_inxmit");
+	updateUI();
+    }
+
+    this.stopXmit = function() {
+	if (is_control) return;
+	xmitting = false;
+	clear_xmit_status();
+	addClass("channel_xmit_noxmit");
+	updateUI();
     }
 
 
-    function Channel(frequency, is_control, department, description) {
-	this.frequency = frequency;
-	this.is_control = is_control;
-	this.department = department;
-	this.description = description;
-	this.level = 0;
+    return this;
+}
 
-	this.xmitting = false;
 
-	this.getFrequency = function() { return this.frequency; }
-	this.isControl = function() { return this.is_control; }
-	this.getDepartment = function() { return this.department; }
-	this.getDescription = function() { return this.description; }
+function ChannelBoard() {
+    var uidiv = undefined;
+    var channels = [];
 
-	this.startXmit = function() { this.xmitting = true; }
-	this.stopXmit = function() { this.xmitting = false; }
+    var channelIndex = {};
 
-	this.isXmit = function() { return this.xmitting; }
+    this.attachUI = function(d) { uidiv = d; };
 
-	this.div = undefined;
+    this.configUpdate = function(config) {
+	channels = [];
 
-	this.updateHTML = function() {
-	    this.div.innerHTML = this.getFrequency() + "(" + this.level + ")" + " / " + this.getDescription();
-	};
-    };
+	channels = config.channels.map(function(d) { return new Channel(d);});
 
-    function channelFrom(d) {
-	return new Channel(d["frequency"], d["is_control"], d["department"], d["description"]);
-    };
+	channels.forEach(function(c) {
+	    channelIndex[c.getFrequency()] = c;
+	});
 
-    function ChannelBoard(div, channels) {
-	this.div = div;
-	this.channels = channels;
+	uidiv.empty();
 
-	this.channel_divs = []; 
-
-	// create a coindexed list of html elements for the channels
-
-	html = "";
-
-	for (var i = 0; i < channels.length; i++) {
-	    var c = channels[i];
-
+	channels.forEach(function(c) {
 	    var chan_class = "channel_status";
 	    if (c.isControl()) chan_class = "channel_status_control";
 
 	    var curdiv = document.createElement("div");
 
-	    c.div = curdiv;
-
 	    curdiv.classList.add(chan_class);
 	    if (!c.isControl()) curdiv.classList.add("channel_xmit_unknown");
 	    curdiv.id = "channel_status_" + c.getFrequency();
 
-	    c.updateHTML();
-	    this.channel_divs.push(curdiv);
+	    c.attachUI(curdiv);
 
-	    this.div.append(curdiv);
-	}
-
-
-
-	function channelIndex(freq) {
-	    for (var i = 0; i < channels.length; i++) {
-		if (channels[i].frequency == freq) {
-		    return i;
-		}
-	    }
-	    return -1;
-	};
-	this.channelIndex = channelIndex;
-
-	this.channelStart = function(freq) {
-	    var i = this.channelIndex(freq);
-	    if (-1 == i) return;
-
-	    if (this.channels[i].isControl()) return;
-
-	    this.channel_divs[i].classList.remove("channel_xmit_unknown");
-	    this.channel_divs[i].classList.remove("channel_xmit_noxmit");
-	    this.channel_divs[i].classList.add("channel_xmit_inxmit");
-
-	    if (this.channels[i].getDescription() == "-idle-") {
-		this.channels[i].description = "????";
-		this.channels[i].updateHTML();
-	    }
-	};
+	    uidiv.append(curdiv);
+	});
+    }
 
 
-	this.channelStop = function(freq) {
-	    var i = this.channelIndex(freq);
-	    if (-1 == i) return;
-	    if (this.channels[i].isControl()) return;
+    this.channelStart = function(response) {
+	var c = channelIndex[response.freq];
+	if (!c) return;
 
-	    this.channel_divs[i].classList.remove("channel_xmit_unknown");
-	    this.channel_divs[i].classList.remove("channel_xmit_inxmit");
-	    this.channel_divs[i].classList.add("channel_xmit_noxmit");
+	c.startXmit();
+    };
 
-	    var newdesc = "-idle-";
-	    if (this.channels[i].description.length && this.channels[i].description.substring(0,6) != "-idle-") newdesc += " (" + this.channels[i].description + ")";
+    this.channelStop = function(response) {
+	var c = channelIndex[response.freq];
+	if (!c) return;
 
-	    this.channels[i].description = newdesc;
-	    this.channels[i].updateHTML();
-	};
-
-	this.channelTag = function(freq, tg) {
-	    var i = this.channelIndex(freq);
-	    if (-1 == i) return;
-	    if (this.channels[i].isControl()) return;
-
-	    var tgent = decodeTalkGroup(tg);
-
-	    var tg_base = tg - (tg % 16);
-	    var tg_flag = tg % 16;
-
-	    if (tgent) {
-		this.channels[i].description = tg_base.toString(16) + "(" + tg_flag + ")" + "/" + tgent.category + "/" + tgent.long;
-	    } else {
-		this.channels[i].description = tg_base.toString(16) + "(" + tg_flag + ")";
-	    }
-	    this.channels[i].updateHTML();
-	};
-
-	this.channelLevels = function(response) {
-	    var levels = response.levels;
-	    for (var f in levels) {
-		var i = channelIndex(f);
-		channels[i].level = levels[f];
-		channels[i].updateHTML();
-	    }
-	};
+	c.stopXmit();
     };
 
 
-    var channel_list = [
-	{ "frequency": 851125000, "is_control": true, "department": "Safety", "description": "" },
-	{ "frequency": 851150000, "is_control": true, "department": "Safety", "description": "" },
-	{ "frequency": 851400000, "is_control": true, "department": "Safety", "description": "" },
-	{ "frequency": 851425000, "is_control": true, "department": "Safety", "description": "" },
-	{ "frequency": 851587500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 851612500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 851762500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 851812500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 852087500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 852212500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 852262500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 852387500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 852675000, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 852837500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 853087500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 853225000, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 853412500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 853437500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 853625000, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 853650000, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 853787500, "is_control": false, "department": "Safety", "description": "" },
-	{ "frequency": 853887500, "is_control": false, "department": "Safety", "description": "" },
-    ];
+    this.channelTag = function(response) {
+	var c = channelIndex[response.freq];
+	if (!c) return;
 
+	var tg = response.tg;
+	if (c.isControl()) return;
 
+	c.setNote(tg);
+    };
 
+    this.channelLevels = function(response) {
+	var levels = response.levels;
+	for (var f in levels) {
+	    var c = channelIndex[f];
+	    if (!c) continue;
 
+	    c.setLevel(levels[f]);
+	}
+    };
 
-
-    
-
-
-
-
-    var all_channels = $.map(channel_list, channelFrom);
-
-
-    var cb = new ChannelBoard($("#channelboard"), all_channels);
-    return cb;
-})();
+    return this;
+}
