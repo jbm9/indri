@@ -110,10 +110,8 @@ var scanner_player = (function() {
 
 	      for (var i = backlog.length-1; i >= 0; i--) { // LIFO
 		  entry = backlog[i];
-		  console.log(entry);
 		  if (entry.available) {
 		      filename = entry.filename;
-		      console.log("HIT");
 		      break;
 		  }
 		  entry = null; // sentinel value
@@ -125,7 +123,6 @@ var scanner_player = (function() {
 
 		  if (null == entry.tg) entry.tg = 0
 		  queue.push(entry);
-		  console.log(queue);
 	      }
 	  }
 
