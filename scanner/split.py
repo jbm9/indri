@@ -462,11 +462,18 @@ if __name__ == '__main__':
     tb = recording_channelizer(channels, options)
     tb.start()
 
+    rounds = 0
+
     while True:
         time.sleep(1)
         tb.check_time_triggers()
-        tb.splat_levels()
-        tb.send_ping()
+
+        rounds += 1
+        if 0 == rounds % 5:
+            tb.splat_levels()
+
+        if 0 == rounds % 2:
+            tb.send_ping()
 #        print [ int(100*math.log10(tb.mags[f_i].level()))/10.0 for f_i in sorted(list(tb.mags)) ]
         print [ "***" if tb.squelch[f_i].unmuted() else "   "  for f_i in sorted(list(tb.mags)) ]
 
