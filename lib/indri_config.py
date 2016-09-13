@@ -53,6 +53,8 @@ class IndriConfig:
                     "out_path": "/tmp/archive",
                     "mode": "S3",  # or "move"
                     "bucket": "indri-testbed",
+                    "no_upload": False,
+                    "do_remove": False
                 },
 
                 "archive": {
