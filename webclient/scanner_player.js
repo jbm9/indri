@@ -5,6 +5,7 @@ var scanner_player = (function() {
 
 
       var playing = false;
+      var playing_entry;
 
       var play_anything = false; // fill dead space
 
@@ -62,6 +63,7 @@ var scanner_player = (function() {
 
 	  console.info("play: " + url);
 	  playing = true;
+	  playing_entry = entry;
 
 	  var request = new XMLHttpRequest();
 
@@ -71,6 +73,8 @@ var scanner_player = (function() {
 	  request.onload = function() {
 	      if (request.status != 200) {
 		  console.log("Error fetching wav: status=" + request.status);
+		  play_next();
+		  return;
 	      }
 
 	      var bytes = request.response;
@@ -95,17 +99,34 @@ var scanner_player = (function() {
 
 
       var play_next = function() {
-	  console.log("play_next: " + this );
-
 	  try {
 	      if (playing) source.stop();
 	  } catch(e) {
 	  }
 
 	  if (play_anything && 0 == queue.length && 0 != backlog.length) {
-	      var e = backlog.pop(); // yes, LIFO
-	      if (null == e.tg) e.tg = 0;
-	      queue.push(e);
+	      var filename = null
+	      var entry;
+
+	      for (var i = backlog.length-1; i >= 0; i--) { // LIFO
+		  entry = backlog[i];
+		  console.log(entry);
+		  if (entry.available) {
+		      filename = entry.filename;
+		      console.log("HIT");
+		      break;
+		  }
+		  entry = null; // sentinel value
+	      }
+
+	      if (filename) {
+		  var newbacklog = backlog.filter(function(e,i,a) { return e.filename != filename; });
+		  backlog = newbacklog;
+
+		  if (null == entry.tg) entry.tg = 0
+		  queue.push(entry);
+		  console.log(queue);
+	      }
 	  }
 
 	  if (queue.length) {
@@ -118,6 +139,11 @@ var scanner_player = (function() {
 
       
       this.enqueue = function(tg,filename, interesting) {
+	  if (playing && filename == playing_entry.filename) {
+	      set_current_tg(tg);
+	  }
+
+
 	  var got_hit = false;
 	  for (var i = 0; i < backlog.length; i++) {
 
@@ -133,6 +159,7 @@ var scanner_player = (function() {
 	      backlog.push({"filename": filename, "tg": tg, "available": false, "added": new Date(), "interesting": interesting});
 	  }
 
+	  //	  window.setTimeout(flushbacklog, 1000);
 	  flushbacklog();
       };
 
@@ -140,7 +167,7 @@ var scanner_player = (function() {
 	  var avails = backlog.filter(function(e,i,a) { return e.available && e.interesting; });
 
 	  var tCutoff = new Date() - 20000;
-	  var newbacklog = backlog.filter(function(e,i,a) { return !e.available && e.added > tCutoff; });
+	  var newbacklog = backlog.filter(function(e,i,a) { return !(e.available && e.interesting) && e.added > tCutoff; });
 	  backlog = newbacklog;
 
 	  for (var i = 0; i < avails.length; i++) queue.push(avails[i]);
@@ -162,9 +189,10 @@ var scanner_player = (function() {
 	  }
 	  if (!got_hit) {
 	      console.log("available (" + backlog.length + "): " + filename);
-	      backlog.push({"filename": filename, "tg": null, "available": false, "added": new Date()});
+	      backlog.push({"filename": filename, "tg": null, "available": true, "added": new Date(), "interesting": false});
 	  }
 
+//	  window.setTimeout(flushbacklog, 1000);
 	  flushbacklog();
       }
 
