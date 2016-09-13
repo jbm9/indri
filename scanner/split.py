@@ -111,7 +111,7 @@ class recording_channelizer(gr.top_block):
             interpolation=16,
             decimation=25,
             taps=None,
-            fractional_bw=None,
+            fractional_bw=0.49,
         )
 
         f_bias = blocks.add_const_ff(1.0)
@@ -125,7 +125,7 @@ class recording_channelizer(gr.top_block):
         procaff(bpf, i)
         procaff(agc, i)
         self.connect(audio_source,
-                     bpf,
+                     #bpf,
                      agc,
                      rational_resampler,
                      f_bias,f_scale,f_to_char)
