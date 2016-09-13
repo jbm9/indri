@@ -86,7 +86,7 @@ function ScannerConnection() {
 	    if (tnow - lastpkt > 5) {
 		live_box.css("background-color", "red");
 	        live_box.text("Long delay:" + lastping);
-//		connection.close()
+		connection.close()
 	    } else
 		live_box.css("background-color", "yellow");
 	} else {
