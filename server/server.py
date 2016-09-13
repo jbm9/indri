@@ -1,9 +1,21 @@
+import os
+import sys
+
+import os.path
+sys.path.append(os.path.dirname(__file__) + "/../lib") # TODO
+
+from indri_config import IndriConfig
+
+from optparse import OptionParser
+
 import json
 import logging
 
 from tornado import ioloop, web, websocket
 import tornado.escape
 
+Gconfig = None
+Gconfigpath = None
 
 class ChannelStates:
     def __init__(self):
@@ -51,14 +63,20 @@ class PostHandler(web.RequestHandler):
         msgtype = arglist[0]
         msgargs = arglist[1:]
 
-        if msgtype != "json":
-            print "bogon packet: %s" % msgtype
-            return
 
         msg = None
 
-        msg_body = "/".join(msgargs)
-        msg = json.loads(msg_body)
+        if msgtype == "reload":
+            Gconfig = IndriConfig(Gconfigpath).config
+            msg = { "type": "config", "config": Gconfig }
+
+        elif msgtype != "json":
+            print "bogon packet: %s" % msgtype
+            return
+        else:
+
+            msg_body = "/".join(msgargs)
+            msg = json.loads(msg_body)
 
         self.write( str(args) )
         self.write( str(msg) )
@@ -84,18 +102,17 @@ class WebSocketServer(websocket.WebSocketHandler):
         self.connection_id = self.application.i
         self.application.connections[self.connection_id] = self
 
-        # Connected event
-        self.write_message(json.dumps({
-                'type': 'connected',
-                'id': self.connection_id,
-            'states': g_channel_states.get_states()
-                }))
 
+        self.write_message(json.dumps({ 'type': "config", "config": Gconfig }))
 
     def on_message(self, message):
         try:
             msg = json.loads(message)
             msg['sender'] = self.connection_id
+
+            if msg["type"] == "config":
+                self.write_message(json.dumps({"type":"config", "config":Gconfig}))
+
             # self.__send_to_connections(msg)
 
         except Exception, e:
@@ -135,6 +152,19 @@ class WebSocketServer(websocket.WebSocketHandler):
 
 
 if __name__ == '__main__':
+    parser = OptionParser(usage="%prog: [options]")
+    parser.add_option("-c", "--config", help="File containing config file")
+
+    (options, args) = parser.parse_args()
+
+    if not options.config:
+        print "Need a config file, -c indri.json"
+        sys.exit(1)
+
+
+    Gconfigpath = options.config
+    Gconfig = IndriConfig(Gconfigpath).config
+
     application = web.Application([
             (r'/post/(?P<args>.*)', PostHandler),
             (r'/', WebSocketServer),
