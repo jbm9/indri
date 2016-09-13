@@ -22,6 +22,10 @@
 # other decoding, you can do it downstream of each channel's squelch.
 
 
+import sys
+import os.path
+sys.path.append(os.path.dirname(__file__) + "/../lib")
+
 import math
 import gnuradio
 from gnuradio import blocks
@@ -52,7 +56,7 @@ import json
 from timestamp_file_sink import timestamp_file_sink
 from time_trigger import time_trigger
 
-
+from indri_config import IndriConfig
 from smartnet_janky import *
 from control_decoder import ControlDecoder
 
@@ -98,7 +102,7 @@ class recording_channelizer(gr.top_block):
     def attach_voice_finals(self, f_i, i, audio_source):
 
 
-        bpf_taps = firdes.band_pass(1, 12500,
+        bpf_taps = firdes.band_pass(1, self.chan_rate,
                                     300.0, 2000.0, 100,
                                     firdes.WIN_HAMMING,
                                     6.76)
@@ -131,7 +135,7 @@ class recording_channelizer(gr.top_block):
                      f_bias,f_scale,f_to_char)
 
 
-        pattern = "%s/audio_%d_%%s.wav" % (options.incoming_path, f_i)
+        pattern = "%s/audio_%d_%%s.wav" % (config["scanner"]["tmp_path"], f_i)
 
         self.user_data[f_i] = { "tg": None }
 
@@ -154,7 +158,7 @@ class recording_channelizer(gr.top_block):
             print "\t\tClosed out talkgroup message, N=%d, tg=%04x (%d) / %s" % (n_samples, tg, tg, path)
 
             filename = path.split("/")[-1]
-            newpath = "%s/%s" % (options.dest_path, filename)
+            newpath = "%s/%s" % (config["scanner"]["out_path"], filename)
             os.rename(path, newpath)
 
             msg = { "type": "tgfile", "tg": tg, "path": filename }
@@ -239,17 +243,16 @@ class recording_channelizer(gr.top_block):
 
 
 
-    def __init__(self, channels=None, samp_rate=2400000, Fc=852700000, base_url=None, threshold=-50, correction=0, gain=10):
+    def __init__(self, config):
+        samp_rate = config["scanner"]["Fs"]
+        Fc = config["scanner"]["Fc"]
+        base_url = config["websocket_uri"]
+        threshold = config["scanner"]["threshold"]
+        correction = config["scanner"]["receiver"]["freq_corr"]
+        gain = config["scanner"]["receiver"]["gain"]
 
-        samp_rate = options.samp_rate
-        Fc = options.freq
-        base_url = options.url
-        threshold = options.threshold
-        correction = options.correction
-        gain = options.gain
 
-
-        self.min_burst = 8000*options.min_burst
+        self.min_burst = 8000*config["scanner"]["min_burst"]
 
         gr.top_block.__init__(self, "Splitter")
 
@@ -258,11 +261,14 @@ class recording_channelizer(gr.top_block):
         # Variables
         ##################################################
         self.samp_rate = samp_rate
-        self.chan_rate = chan_rate = 12500
+        self.chan_rate = chan_rate = config["scanner"]["chan_rate"]
         self.n_channels = n_channels = samp_rate/chan_rate
 
 
-        self.channels = channels
+        self.channels = config["channels"]
+        self.channel_dict = {}
+        for c in self.channels:
+            self.channel_dict[c["freq"]] = c
 
         self.Fc = Fc
 
@@ -270,7 +276,6 @@ class recording_channelizer(gr.top_block):
         self.threshold = threshold # = -50.0
 
         self.base_url = base_url
-
 
         self.gain = gain
         self.gain_if = 0
@@ -295,12 +300,13 @@ class recording_channelizer(gr.top_block):
         print "#"
 
         print "# Starting up scanner: Fs=%d, Fc=%d, %d~%d,Fchan=%d, n_chan=%d, threshold=%d" % (samp_rate, Fc, min(all_freqs), max(all_freqs), chan_rate, n_channels, threshold)
-        if channels:
-            missing_channels = set(channels)
+        if self.channels:
+            missing_channels = set(self.channel_dict.keys())
             skipped_channels = 0
+
             for i in range(n_channels):
                 f_i = channelizer_frequency(i)
-                if f_i in channels:
+                if f_i in self.channel_dict:
                     print "#   * %03d %d" % (i, f_i)
                     missing_channels.remove(f_i)
                 else:
@@ -338,7 +344,7 @@ class recording_channelizer(gr.top_block):
         self.osmosdr_source_0.set_freq_corr(self.freq_corr, 0)
         self.osmosdr_source_0.set_dc_offset_mode(0, 0)
         self.osmosdr_source_0.set_iq_balance_mode(0, 0)
-        self.osmosdr_source_0.set_gain_mode(True, 0)
+        self.osmosdr_source_0.set_gain_mode(config["scanner"]["receiver"]["gain_mode"], 0)
         self.osmosdr_source_0.set_gain(self.gain, 0)
         self.osmosdr_source_0.set_if_gain(self.gain_if, 0)
         self.osmosdr_source_0.set_bb_gain(self.gain_bb, 0)
@@ -359,7 +365,8 @@ class recording_channelizer(gr.top_block):
         ##################################################
         # Connections
         ##################################################
-        self.connect((self.osmosdr_source_0, 0), (self.pfb_channelizer_ccf_0, 0))
+        self.connect((self.osmosdr_source_0, 0), 
+                     (self.pfb_channelizer_ccf_0, 0))
 
         self.run_time = time.time()
 
@@ -369,10 +376,11 @@ class recording_channelizer(gr.top_block):
         for i in range(self.n_channels):
             f_i = channelizer_frequency(i)
 
-            if None == channels or f_i in channels:
+            if not self.channels or f_i in self.channel_dict:
                 audio_source = self.attach_audio_channel(f_i, i)
 
-                if f_i == 851400000 or f_i == 851425000:
+                c = self.channel_dict[f_i]
+                if c["is_control"]:
                     self.attach_control_finals(f_i, audio_source)
                 else:
                     self.attach_voice_finals(f_i, i, audio_source)
@@ -414,7 +422,7 @@ class recording_channelizer(gr.top_block):
     def splat_levels(self):
         levels = {}
         for f_i in self.mags:
-            levels[f_i] = int(100*math.log10(self.mags[f_i].level()))/10.0
+            levels[f_i] = int(1e-10 + 100*math.log10(self.mags[f_i].level()))/10.0
 
         body = { "type": "levels", "levels": levels, "squelch": self.threshold }
         self._submit(body)
@@ -426,40 +434,28 @@ class recording_channelizer(gr.top_block):
 
 if __name__ == '__main__':
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
-    parser.add_option("-c", "--channels", help="File containing channels list: will only emit these")
-    parser.add_option("-r", "--samp-rate", help="Sample rate (Hz)", default=2400000, type=int)
-    parser.add_option("-f", "--freq", help="Center frequency (Hz)", default=852700000, type=int)
-    parser.add_option("-u", "--url", help="Server base URL", default=None)
-    parser.add_option("-t", "--threshold", help="Squelch threshold on audio channels, dB", default=-50, type=int)
-    parser.add_option("-o", "--correction", help="Correction offset, PPM", default=0, type=int)
-    parser.add_option("-g", "--gain", help="Gain, dB", default=10, type=int)
-    parser.add_option("-i", "--incoming-path", help="Temporary incoming path to use", default="scanner/incoming")
-    parser.add_option("-d", "--dest-path", help="Destination path to use", default="scanner/upload")
-    parser.add_option("-m", "--min-burst", help="Minimum burst duration, seconds", default=2.0, type=float)
+    parser.add_option("-c", "--config", help="File containing config file")
 
     (options, args) = parser.parse_args()
 
+    print options
+
+    if not options.config:
+        print "Need a config file, -c indri.json"
+        sys.exit(1)
+
+
+    config = IndriConfig(options.config)
     try:
-        os.makedirs(options.incoming_path)
+        os.makedirs(config["scanner"]["tmp_path"])
+    except:
+        pass
+    try:
+        os.makedirs(config["scanner"]["out_path"])
     except:
         pass
 
-    try:
-        os.makedirs(options.dest_path)
-    except:
-        pass
-
-
-
-
-    channels = None
-    if options.channels:
-        f = file(options.channels)
-        lines = f.read().split("\n")
-        channels = map(int, filter(None, lines))
-        f.close()
-
-    tb = recording_channelizer(channels, options)
+    tb = recording_channelizer(config)
     tb.start()
 
     rounds = 0
@@ -474,12 +470,8 @@ if __name__ == '__main__':
 
         if 0 == rounds % 2:
             tb.send_ping()
-#        print [ int(100*math.log10(tb.mags[f_i].level()))/10.0 for f_i in sorted(list(tb.mags)) ]
+#        print [ int(100*math.log10(1e-10 + tb.mags[f_i].level()))/10.0 for f_i in sorted(list(tb.mags)) ]
         print [ "***" if tb.squelch[f_i].unmuted() else "   "  for f_i in sorted(list(tb.mags)) ]
 
-    try:
-        raw_input('Press Enter to quit: ')
-    except EOFError:
-        pass
     tb.stop()
     tb.wait()
