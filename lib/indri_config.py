@@ -27,7 +27,7 @@ class IndriConfig:
                 "mode": "smartnet",
 
                 "websocket_uri": "http://localhost:8081/post/",
-                "wav_base_uri": "http://localhost:9000/scanner/scanner/archive",
+                "wav_base_uri": "http://localhost:9000/scanner/scanner/archive/",
 
                 "scanner": {
                     "tmp_path": "/tmp/incoming",
@@ -92,7 +92,7 @@ if "__main__" == __name__:
     (options, args) = parser.parse_args()
 
     if options.template:
-        c = IndriConfig(False)
+        c = IndriConfig(blank=False)
         print c.to_json()
         sys.exit(0)
 
