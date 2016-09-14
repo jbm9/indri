@@ -137,31 +137,40 @@ class recording_channelizer(gr.top_block):
 
         pattern = "%s/audio_%d_%%s.wav" % (config["scanner"]["tmp_path"], f_i)
 
-        self.user_data[f_i] = { "tg": None }
+        self.user_data[f_i] = { "tg": None, "power": 0, "power_samples": 0, "last_power": 0 }
 
         wav_header = wave_header(1, 8000, 8, 0)
 
         def wave_fixup_cb(fd, n_samples, path):
             wave_fixup_length(fd)
             tg = 0
+            avg_power = -100.0
 
             if self.user_data[f_i]["tg"]:
                 tg = self.user_data[f_i]["tg"]
                 self.user_data[f_i]["tg"] = None
 
+                if self.user_data[f_i]["power_samples"]:
+                    sum_power = self.user_data[f_i]["power"]
+                    n = self.user_data[f_i]["power_samples"]
+                    avg_power = sum_power / n
+
+                    self.user_data[f_i]["power"] = 0.0
+                    self.user_data[f_i]["power_samples"] = 0
+
             if n_samples < self.min_burst:
-                print "\t\tTOO SHORT: talkgroup message, N=%d, tg=%04x (%d) / %s" % (n_samples, tg, tg, path)
+                print "\t\tTOO SHORT: talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path)
                 os.remove(path)
                 return
 
 
-            print "\t\tClosed out talkgroup message, N=%d, tg=%04x (%d) / %s" % (n_samples, tg, tg, path)
+            print "\t\tClosed out talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path)
 
             filename = path.split("/")[-1]
             newpath = "%s/%s" % (config["scanner"]["out_path"], filename)
             os.rename(path, newpath)
 
-            msg = { "type": "tgfile", "tg": tg, "path": filename }
+            msg = { "type": "tgfile", "tg": tg, "path": filename, "avg_power": avg_power }
 
             self._submit(msg)
 
@@ -241,6 +250,15 @@ class recording_channelizer(gr.top_block):
             print e
             raise
 
+
+    def update_powers(self):
+        for f_i in self.channel_dict:
+            if f_i in self.squelch and f_i in self.user_data:
+                if self.squelch[f_i].unmuted():
+                    # we'll take a geometric mean here, because laziness
+                    m = 10.0*math.log10(1e-10 + self.mags[f_i].level())
+                    self.user_data[f_i]["power"] += m
+                    self.user_data[f_i]["power_samples"] += 1
 
 
     def __init__(self, config):
@@ -461,6 +479,7 @@ if __name__ == '__main__':
     while True:
         time.sleep(1)
         tb.check_time_triggers()
+        tb.update_powers()
 
         rounds += 1
         if 0 == rounds % 5:
