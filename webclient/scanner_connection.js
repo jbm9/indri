@@ -10,6 +10,9 @@ function ScannerConnection() {
     var uidiv = null;
 
 
+    var print_messages = false;
+    this.setPrintMessages = function(v) { print_messages = v; };
+
     function handlePing(response) {
 	lastping_ts = response.ts
 	lastping = new Date();
@@ -51,6 +54,8 @@ function ScannerConnection() {
 	connection.onmessage = function(e) {
 	    var response = JSON.parse(e.data);
 	  
+	    if (print_messages) console.debug(response);
+
 	    lastpkt = new Date();
 
 	    var msgtype = response.type;

@@ -10,10 +10,10 @@ function ScannerPlayer() {
     var playing_entry;
 
     var play_anything = false; // fill dead space
-
     this.setPlayAnything = function(v) { play_anything = v; }
 
-
+    var printQueueDebug = false; // incredibly noisy, but also super handy sometimes
+    this.setPrintQueueDebug = function(v) { printQueueDebug = v; }
 
     var sysac = audioContext = window.AudioContext || window.webkitAudioContext;
     var context = new sysac();
@@ -70,9 +70,9 @@ function ScannerPlayer() {
     var play = function(entry) {
 	var url = base_url + entry.filename;
 
-	set_current_tg("(loading) " + entry.tg);
+	set_current_tg("(loading) " + entry.tg, entry.avg_power);
 
-	console.info("play: " + url);
+	if (printQueueDebug) console.debug("play: " + url);
 	playing = true;
 	playing_entry = entry;
 
@@ -83,7 +83,7 @@ function ScannerPlayer() {
 
 	request.onload = function() {
 	    if (request.status != 200) {
-		console.log("Error fetching wav: status=" + request.status);
+		console.error("Error fetching wav: status=" + request.status);
 		play_next();
 		return;
 	    }
@@ -100,9 +100,9 @@ function ScannerPlayer() {
 
 		source.connect(context.destination);
 		source.start(0);
-		set_current_tg(entry.tg);
+		set_current_tg(entry.tg, entry.avg_power);
             },
-				    function(e) { console.log("Audio decode error: " + e); play_next(); }
+				    function(e) { console.error("Audio decode error: " + e); play_next(); }
 				   );
 	};
 	request.send();
@@ -122,7 +122,7 @@ function ScannerPlayer() {
 	    for (var i = backlog.length-1; i >= 0; i--) { // LIFO
 		entry = backlog[i];
 		if (entry.available) {
-		    filename = entry.filename;
+		    filename = entry.path;
 		    break;
 		}
 		entry = null; // sentinel value
@@ -146,33 +146,6 @@ function ScannerPlayer() {
     }
 
     
-    var enqueue = function(tg,filename, interesting) {
-	if (playing && filename == playing_entry.filename) {
-	    set_current_tg(tg);
-	}
-
-
-	var got_hit = false;
-	for (var i = 0; i < backlog.length; i++) {
-
-	    if (filename == backlog[i].filename) {
-		backlog[i].tg = tg;
-		backlog[i].available = true;
-		got_hit = true;
-		console.log("qualified filename: " + filename);
-	    }
-	}
-	if (!got_hit) {
-	    console.log("Unqualified filename: " + filename);
-	    backlog.push({"filename": filename, "tg": tg, "available": false, "added": new Date(), "interesting": interesting});
-	}
-
-	//	  window.setTimeout(flushbacklog, 1000);
-	flushbacklog();
-    };
-
-    this.enqueue = enqueue;
-
     var flushbacklog = function() {
 	var avails = backlog.filter(function(e,i,a) { return e.available && e.interesting; });
 
@@ -194,12 +167,17 @@ function ScannerPlayer() {
 	    if (filename == backlog[i].filename) {
 		backlog[i].available = true;
 		got_hit = true;
-		console.log("Got hit: " + filename);
+		if (printQueueDebug) console.debug("Got hit: " + filename);
 	    }
 	}
 	if (!got_hit) {
-	    console.log("available (" + backlog.length + "): " + filename);
-	    backlog.push({"filename": filename, "tg": null, "available": true, "added": new Date(), "interesting": false});
+	    if (printQueueDebug) console.debug("available (" + backlog.length + "): " + filename);
+	    backlog.push({"filename": filename, 
+			  "tg": null, 
+			  "available": true, 
+			  "added": new Date(), 
+			  "interesting": false,
+			  "avg_power": -101.0});
 	}
 
 	//	  window.setTimeout(flushbacklog, 1000);
@@ -210,18 +188,49 @@ function ScannerPlayer() {
 
     this.handle_tgfile = function(response) {
 	var tg = response.tg
-	
+	var avg_power = response.avg_power;
+	var filename = response.path;
+
 	var interesting = (-1 == tg_follow) || 
 	    (-1 != tg_follow.indexOf(tg));
 
-	enqueue(tg, response.path, interesting);
+	if (playing && filename == playing_entry.filename) {
+	    set_current_tg(tg, avg_power);
+	}
+
+
+	var got_hit = false;
+
+
+	for (var i = 0; i < backlog.length; i++) {
+
+	    if (filename == backlog[i].filename) {
+		backlog[i].tg = tg;
+		backlog[i].available = true;
+		backlog[i].avg_power = avg_power;
+		got_hit = true;
+		if (printQueueDebug) console.debug("qualified filename: " + filename);
+	    }
+	}
+	if (!got_hit) {
+	    if (printQueueDebug) console.debug("Unqualified filename: " + filename);
+	    backlog.push({"filename": filename, 
+			  "tg": tg, 
+			  "available": false, 
+			  "added": new Date(), 
+			  "interesting": interesting,
+			  "avg_power": avg_power});
+	}
+
+	//	  window.setTimeout(flushbacklog, 1000);
+	flushbacklog();
     }
 
     this.handle_fileup = function(response) {
 	available(response.path);
     }
 
-    var set_current_tg = function(s) {
+    var set_current_tg = function(s, pwr) {
 	var curtg = uidiv.find(".current_tg");
 	if (null == s) {
 	    curtg.text("-idle-");
@@ -231,6 +240,8 @@ function ScannerPlayer() {
 	    var decode = "TG-" + tgId.toString(16);
 	    if (talkgroups) {
 		var tg = talkgroups.lookup(tgId);
+		if (pwr) 
+		    decode = "[" + (parseInt(pwr*10)/10.0) + "] " + decode
 		if (tg)
 		    decode += "--" + tg.category + "/" + tg.short + 
 		              "(" + tg.long + ")";

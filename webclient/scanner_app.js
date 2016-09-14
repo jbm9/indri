@@ -66,5 +66,11 @@ function ScannerApp() {
 
     scanner_connection.connect(hostname);
 
+    this.connection = scanner_connection;
+    this.config = scanner_config;
+    this.player = scanner_player;
+    this.talkgroups = scanner_talkgroups;
+    this.channel_board =  channel_board;
+
     return this;
 }
