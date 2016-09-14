@@ -24,6 +24,12 @@ function ScannerApp() {
     var scanner_config = new ScannerConfig();
     scanner_connection.register("config", scanner_config.updateConfig);
 
+    //////////////////////////////////////////
+    // Talkgroup decoder ring
+    //
+    var scanner_talkgroups = new ScannerTalkgroups();
+    scanner_config.register(scanner_talkgroups.configUpdate);
+
 
     //////////////////////////////////////////
     // Audio player
@@ -31,6 +37,7 @@ function ScannerApp() {
     var scanner_player = new ScannerPlayer();
 
     scanner_player.initUI($("#nowplaying"));
+    scanner_player.registerTalkgroups(scanner_talkgroups);
 
     scanner_config.register(scanner_player.configUpdate);
 
@@ -44,6 +51,7 @@ function ScannerApp() {
     //
     var channel_board = new ChannelBoard();
     channel_board.attachUI($("#channelboard"));
+    channel_board.registerTalkgroups(scanner_talkgroups);
 
     scanner_config.register(channel_board.configUpdate);
 

@@ -2,7 +2,7 @@ function Channel(entry) {
     var frequency = entry.freq;
     var is_control = entry.is_control;
     var name = entry.name;
-    var level = 0;
+    var level = -100;
 
     var xmitting = false;
 
@@ -10,12 +10,19 @@ function Channel(entry) {
 
     var note = "";
 
+    var talkgroups = null;
+
     this.getFrequency = function() { return frequency; }
     this.isControl = function() { return is_control; }
     this.getName = function() { return name; }
 
     this.isXmit = function() { return xmitting; }
 
+
+    decode_talkgroup = function(tg) {
+	if (!talkgroups) return null;
+	return talkgroups.lookup(tg);
+    }
 
     function updateUI() {
 	uidiv.innerHTML = frequency + 
@@ -57,6 +64,8 @@ function Channel(entry) {
 	updateUI();
     }
 
+    this.registerTalkGroups = function(tgs) { talkgroups = tgs; }
+	
 
     return this;
 }
@@ -68,7 +77,14 @@ function ChannelBoard() {
 
     var channelIndex = {};
 
+    var talkgroups = null;
+
     this.attachUI = function(d) { uidiv = d; };
+
+    this.registerTalkgroups = function(tgs) { 
+	talkgroups = tgs; 
+	channels.forEach(function(c) { c.registerTalkGroups(tgs) });
+    };
 
     this.configUpdate = function(config) {
 	channels = [];

@@ -4,6 +4,7 @@ function ScannerPlayer() {
     var backlog = []; // enqueued-but-unavailable files
     var queue = []; // actual playlist
 
+    var talkgroups = null;
 
     var playing = false;
     var playing_entry;
@@ -44,6 +45,11 @@ function ScannerPlayer() {
     }
 
     this.setBaseURL = function(u) { base_url = u; }
+
+
+    this.registerTalkgroups = function(tgs) { 
+	talkgroups = tgs;
+    };
 
     var pause_unpause = function(cb) {
 	if (!paused) {
@@ -215,21 +221,22 @@ function ScannerPlayer() {
 	available(response.path);
     }
 
-    function decode_tg(tg) {
-	var e = talkgroups[tg - (tg%16)];
-	if (e)
-	    return e.short + "/" + e.long;
-	return "(unk)";
-    }
-
     var set_current_tg = function(s) {
 	var curtg = uidiv.find(".current_tg");
 	if (null == s) {
 	    curtg.text("-idle-");
 	    curtg.css("background-color", "#ccc")
 	} else {
-	    var decode = decode_tg(s);
-	    curtg.text("TG-" + parseInt(s).toString(16) + " " + decode);
+	    var tgId = parseInt(s);
+	    var decode = "TG-" + tgId.toString(16);
+	    if (talkgroups) {
+		var tg = talkgroups.lookup(tgId);
+		if (tg)
+		    decode += "--" + tg.category + "/" + tg.short + 
+		              "(" + tg.long + ")";
+	    }
+
+	    curtg.text(decode);
 	    curtg.css("background-color", "#ecc")
 	}
     }
