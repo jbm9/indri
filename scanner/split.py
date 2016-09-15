@@ -135,7 +135,7 @@ class recording_channelizer(gr.top_block):
                      f_bias,f_scale,f_to_char)
 
 
-        pattern = "%s/audio_%d_%%s.wav" % (config["scanner"]["tmp_path"], f_i)
+        pattern = "%s/audio_%d_%%s.wav" % (config["scanner"]["tmp_dir"], f_i)
 
         self.user_data[f_i] = { "tg": None, "power": 0, "power_samples": 0, "last_power": 0 }
 
@@ -167,7 +167,7 @@ class recording_channelizer(gr.top_block):
             print "\t\tClosed out talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path)
 
             filename = path.split("/")[-1]
-            newpath = "%s/%s" % (config["scanner"]["out_path"], filename)
+            newpath = "%s/%s" % (config["scanner"]["out_dir"], filename)
             os.rename(path, newpath)
 
             msg = { "type": "tgfile", "tg": tg, "path": filename, "avg_power": avg_power }
@@ -463,11 +463,11 @@ if __name__ == '__main__':
 
     config = IndriConfig(options.config)
     try:
-        os.makedirs(config["scanner"]["tmp_path"])
+        os.makedirs(config["scanner"]["tmp_dir"])
     except:
         pass
     try:
-        os.makedirs(config["scanner"]["out_path"])
+        os.makedirs(config["scanner"]["out_dir"])
     except:
         pass
 

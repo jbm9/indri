@@ -27,11 +27,11 @@ class IndriConfig:
                 "mode": "smartnet",
 
                 "websocket_uri": "http://localhost:8081/post/",
-                "wav_base_uri": "http://localhost:9000/scanner/scanner/archive/",
+                "wav_base_uri": "http://localhost:9000/scanner/scanner/archived/", # note the slash at the end
 
                 "scanner": {
-                    "tmp_path": "/tmp/incoming",
-                    "out_path": "/tmp/upload",
+                    "tmp_dir": "/tmp/incoming",
+                    "out_dir": "/tmp/upload",
                     "chan_rate": 12500,
 
                     "Fc": 851600000,
@@ -50,16 +50,21 @@ class IndriConfig:
 
 
                 "upload": {
-                    "out_path": "/tmp/archive",
                     "mode": "S3",  # or "move"
+                    "upstream": "scanner",
+                    "tmp_dir": "/tmp/upload_working",
+                    "out_dir": "/tmp/uploaded",
                     "bucket": "indri-testbed",
-                    "no_upload": False,
                     "do_remove": False
                 },
 
                 "archive": {
-                    "path": "/tmp/archive",
-                }
+                    "mode": "move",
+                    "upstream": "upload",
+                    "tmp_dir": "/tmp/archived",
+                    "out_dir": "/tmp/archived",
+                    "do_remove": False
+                },
 
             }
 
