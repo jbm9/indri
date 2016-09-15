@@ -26,6 +26,8 @@ import sys
 import os.path
 sys.path.append(os.path.dirname(__file__) + "/../lib")
 
+import errno
+
 import math
 import gnuradio
 from gnuradio import blocks
@@ -202,7 +204,11 @@ class recording_channelizer(gr.top_block):
         control_decoder = ControlDecoder()
 
         def print_cb(cbname, args):
-            print "%s: %s" % (cbname, str(args))
+            if not self.control_log:
+                return
+            # print "%s: %s" % (cbname, str(args))
+            logline = "%s %s\n" % (cbname, " ".join(map(str, args)))
+            self.control_log.write(logline)
 
 
         def group_call_cb(chan, tg):
@@ -213,8 +219,10 @@ class recording_channelizer(gr.top_block):
             if freq in self.user_data:
                 self.user_data[freq]["tg"] = tg
 
+            print_cb("group_call", [chan, tg])
+
         control_decoder.register_cb("group_call", group_call_cb)
-        # control_decoder.register_cb("*", print_cb)
+        control_decoder.register_cb("*", print_cb)
 
         def pkt_cb(pkt):
             self.control_counts["good"] += 1
@@ -307,6 +315,15 @@ class recording_channelizer(gr.top_block):
 
         self.mags = {}    # freq => magnitude monitor
         self.squelch = {} # freq => squelch
+
+
+        self.control_log_tmp_dir = config["scanner"]["control_log_tmp_dir"]
+        self.control_log_dir = config["scanner"]["control_log_dir"]
+
+        self.control_log = None
+        self.control_log_filename = None
+
+        self.roll_control_log()
 
         def channelizer_frequency(i):
             if i > n_channels/2:
@@ -413,6 +430,25 @@ class recording_channelizer(gr.top_block):
         for ttrig in self.time_triggers:
             ttrig.poll_end()
 
+
+    def roll_control_log(self):
+        if self.control_log:
+            self.control_log.close()
+            cur_path = os.path.join(self.control_log_tmp_dir, 
+                                    self.control_log_filename)
+
+            new_path = os.path.join(self.control_log_dir, 
+                                    self.control_log_filename)
+
+            os.rename(cur_path, new_path)
+
+        self.control_log_filename = "control_log_%d.log" % time.time()
+        cl_path = os.path.join(self.control_log_tmp_dir,
+                               self.control_log_filename)
+
+        self.control_log = file(cl_path, "a")
+
+
     def get_samp_rate(self):
         return self.samp_rate
 
@@ -471,14 +507,16 @@ if __name__ == '__main__':
 
 
     config = IndriConfig(options.config)
-    try:
-        os.makedirs(config["scanner"]["tmp_dir"])
-    except:
-        pass
-    try:
-        os.makedirs(config["scanner"]["out_dir"])
-    except:
-        pass
+
+    for dir_key in ["tmp_dir", "out_dir", "control_log_tmp_dir", "control_log_dir"]:
+        try:
+            if dir_key in config["scanner"]:
+                os.makedirs(config["scanner"][dir_key])
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                pass
+            else:
+                raise e
 
     tb = recording_channelizer(config)
     tb.start()
@@ -499,6 +537,9 @@ if __name__ == '__main__':
             tb.send_ping()
 #        print [ int(100*math.log10(1e-10 + tb.mags[f_i].level()))/10.0 for f_i in sorted(list(tb.mags)) ]
         print [ "***" if tb.squelch[f_i].unmuted() else "   "  for f_i in sorted(list(tb.mags)) ]
+
+        if 0 == rounds % 60:
+            tb.roll_control_log()
 
     tb.stop()
     tb.wait()
