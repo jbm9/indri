@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import boto
 
 from base_uploader import BaseUploader, run_uploader

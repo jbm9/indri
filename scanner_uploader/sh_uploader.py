@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+
+
 from base_uploader import BaseUploader, run_uploader
 
 import subprocess
