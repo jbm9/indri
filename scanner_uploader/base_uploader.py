@@ -123,6 +123,7 @@ class BaseUploader(watchdog.events.FileSystemEventHandler):
         except OSError, e:
             if e.errno == errno.ENOENT:
                 print "%s: Already handled, skipping" % filename
+                return
 
         try:
             success = self.handle(tmp_path, filename)
