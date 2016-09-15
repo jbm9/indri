@@ -9,6 +9,9 @@ function ScannerConnection() {
 
     var uidiv = null;
 
+    var control_counts = { "good": 0,
+			   "bad": 0,
+			   "dt": 1.0 };
 
     var print_messages = false;
     this.setPrintMessages = function(v) { print_messages = v; };
@@ -17,7 +20,6 @@ function ScannerConnection() {
 	lastping_ts = response.ts
 	lastping = new Date();
     }
-
 
     function timeoutTriggered(timeout_s) {
 	if (!connection) return null; // this is kinda nonsense
@@ -28,7 +30,15 @@ function ScannerConnection() {
     }
     this.timeoutTriggered = timeoutTriggered;
 
-    var handlers = { "ping": handlePing }; // message type => handler(evt)
+
+    function handleControlCounts(response) {
+	control_counts.good = response.good;
+	control_counts.bad = response.bad;
+	control_counts.dt = response.dt;
+    }
+
+    var handlers = { "ping": handlePing,
+		     "control_counts": handleControlCounts }; // message type => handler(evt)
 
     this.connect = function(hostname) {
 	connection = new WebSocket("ws://" + hostname + ":8081");
@@ -98,6 +108,17 @@ function ScannerConnection() {
 	    live_box.css("background-color", "green");
 	    live_box.text(" OK ");
 	}
+
+
+	var conn_stats_box = uidiv.find(".connection_stats");
+	var cc_sum = control_counts.good + control_counts.bad;
+	var good_frac = control_counts.good / cc_sum;
+	var seen_frac = cc_sum / (3600.0/84 * control_counts.dt);
+
+	conn_stats_box.text(parseInt(100*good_frac)/100 + ":" +
+			    parseInt(100*seen_frac)/100 + ": " +
+			    control_counts.good + "/" + control_counts.bad);
+
     }
 
     this.attachUI = function(uidiv_in) {
@@ -107,6 +128,11 @@ function ScannerConnection() {
 	live_box.classList.add("connection_live");
 	live_box.textContent = "***";
 	uidiv.append(live_box);
+
+	var conn_stats_box = document.createElement("span");
+	conn_stats_box.classList.add("connection_stats");
+	conn_stats_box.textContent = "0.0 (0/0)";
+	uidiv.append(conn_stats_box);
     }
 
     this.register = function(evtname, handler) {

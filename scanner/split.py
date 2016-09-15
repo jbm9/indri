@@ -138,6 +138,7 @@ class recording_channelizer(gr.top_block):
         pattern = "%s/audio_%d_%%s.wav" % (config["scanner"]["tmp_dir"], f_i)
 
         self.user_data[f_i] = { "tg": None, "power": 0, "power_samples": 0, "last_power": 0 }
+        self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": time.time() }
 
         wav_header = wave_header(1, 8000, 8, 0)
 
@@ -216,10 +217,10 @@ class recording_channelizer(gr.top_block):
         # control_decoder.register_cb("*", print_cb)
 
         def pkt_cb(pkt):
-            # print "pkt: %s" % str(pkt)
-            s = str(control_decoder)
+            self.control_counts["good"] += 1
             unh = control_decoder.handle_packet(pkt)
             if unh:
+                s = str(control_decoder)
                 print "unhandled: %03x/%d: %s / %s" % (pkt["cmd"], pkt["group"], str(s), str(pkt))
 
         def skipped_cb(n):
@@ -228,6 +229,7 @@ class recording_channelizer(gr.top_block):
 
         def cksum_err_cb(pkt):
             # print "cksum:"
+            self.control_counts["bad"] += 1
             control_decoder.handle_cksum_err(pkt)
 
 
@@ -450,6 +452,13 @@ class recording_channelizer(gr.top_block):
         self._submit(body)
 
 
+    def submit_control_counts(self):
+        tnow = time.time()
+        self.control_counts["dt"] = int(1000*(tnow - self.control_counts["t0"]))/1000.0
+
+        self._submit(self.control_counts)
+        self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": tnow }
+
 if __name__ == '__main__':
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
     parser.add_option("-c", "--config", help="File containing config file")
@@ -484,6 +493,7 @@ if __name__ == '__main__':
         rounds += 1
         if 0 == rounds % 5:
             tb.splat_levels()
+            tb.submit_control_counts()
 
         if 0 == rounds % 2:
             tb.send_ping()
