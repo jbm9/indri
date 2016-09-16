@@ -69,7 +69,7 @@ class timestamp_file_sink(decim_block):
                 self.file_samples = 0
 
             path = datetime.datetime.now().strftime(self.path_pattern)
-            print "Starting new file: last=%d, now=%d, new file=%s" % (self.last_sample, t, path)
+            # print "Starting new file: last=%d, now=%d, new file=%s" % (self.last_sample, t, path)
 
             self.path = path
             self.fd = file(path, self.mode)
