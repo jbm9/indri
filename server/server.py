@@ -74,9 +74,17 @@ class PostHandler(web.RequestHandler):
             print "bogon packet: %s" % msgtype
             return
         else:
-
             msg_body = "/".join(msgargs)
             msg = json.loads(msg_body)
+
+            if msg["type"] == "start":
+                g_channel_states.open(msg["freq"])
+            elif msg["type"] == "stop":
+                g_channel_states.close(msg["freq"])
+            elif msg["type"] == "tune":
+                if not g_channel_states.tag(msg["freq"], msg["tg"]):
+                    msg = None # scrub dupes
+
 
         self.write( str(args) )
         self.write( str(msg) )
@@ -104,6 +112,9 @@ class WebSocketServer(websocket.WebSocketHandler):
 
 
         self.write_message(json.dumps({ 'type': "config", "config": Gconfig }))
+        self.write_message(json.dumps({ 'type': 'connected',
+                                        'states': g_channel_states.get_states() }))
+
 
     def on_message(self, message):
         try:
