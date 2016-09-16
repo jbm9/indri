@@ -37,8 +37,52 @@ function ScannerConnection() {
 	control_counts.dt = response.dt;
     }
 
+    var handleConnected = function(response) {
+	console.log("connected!");
+	var dump = response.states;
+	for (var i = 0; i < dump.length; i++) {
+	    var cs = dump[i];
+
+	    if (cs.state == "open") {
+		handle_response({"type": "start", "freq": cs.freq});
+		if (cs.tg != 0) handle_response({"type": "tune", "freq": cs.freq, "tg": cs.tg});
+	    } else if(cs.state == "closed") {
+		handle_response({"type": "stop", "freq": cs.freq});
+	    }
+	}
+
+    };
+
     var handlers = { "ping": handlePing,
-		     "control_counts": handleControlCounts }; // message type => handler(evt)
+		     "control_counts": handleControlCounts,
+		   "connected": handleConnected}; // message type => handler(evt)
+
+
+    var handle_response = function(response, e) {
+	if (false === print_messages) {
+	} else if (true === print_messages) {
+	    console.debug(response);
+	} else if (-1 != print_messages.indexOf(response.type)) {
+	    console.debug(response);
+	}
+
+	lastpkt = new Date();
+
+	var msgtype = response.type;
+	if (!msgtype) {
+	    console.log("Error: message without type: " + e);
+	    return;
+	}
+
+
+	var handler = handlers[msgtype];
+	if (!handler) {
+	    console.log("Error: unhandled message type: " + msgtype + ": " + e);
+	    return;
+	}
+
+	handler(response);
+    };
 
     this.connect = function(hostname) {
 	connection = new WebSocket("ws://" + hostname + ":8081");
@@ -63,25 +107,7 @@ function ScannerConnection() {
 
 	connection.onmessage = function(e) {
 	    var response = JSON.parse(e.data);
-	  
-	    if (print_messages) console.debug(response);
-
-	    lastpkt = new Date();
-
-	    var msgtype = response.type;
-	    if (!msgtype) {
-		console.log("Error: message without type: " + e);
-		return;
-	    }
-
-
-	    var handler = handlers[msgtype];
-	    if (!handler) {
-		console.log("Error: unhandled message type: " + msgtype + ": " + e);
-		return;
-	    }
-
-	    handler(response);
+	    handle_response(response, e);
 	}
 
     };
