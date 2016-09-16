@@ -45,7 +45,7 @@ class smartnet_janky(gr.sync_block):
     FRAME_LEN = 84
     BODY_LEN = FRAME_LEN - PREAMBLE_LEN
 
-    def __init__(self, t0=0, packet_cb=None, skipped_cb=None, cksum_err_cb=None):
+    def __init__(self, t0=0, packet_cb=None, skipped_cb=None, cksum_err_cb=None, offset_mag=None):
         gr.sync_block.__init__(self, "smartnet_janky",
                                 in_sig=[numpy.byte],
                                 out_sig=None)
@@ -57,6 +57,14 @@ class smartnet_janky(gr.sync_block):
         self.packet_cb = packet_cb
         self.skipped_cb = skipped_cb
         self.cksum_err_cb = cksum_err_cb
+
+        self.offset_mag = offset_mag
+
+    def read_offset(self):
+        if not self.offset_mag:
+            return 0.0
+
+        return self.offset_mag.level()
 
     def _find_preamble(self, a):
         for i in range(len(a) - len(self.PREAMBLE)):
@@ -248,6 +256,11 @@ def smartnet_attach_control_dsp(top_block, audio_source, t0, pkt_cb, skip_cb, ck
         top_block.connect(audio_source, offset)
         top_block.connect(offset, (differential,1))
 
+        # sample off the offsets to adjust tuning
+        offset_sampler = blocks.keep_one_in_n(gr.sizeof_float, 10*avglen)
+        offset_mag_block = blocks.probe_signal_f()
+        top_block.connect(offset, offset_sampler, offset_mag_block)
+
         rational_resampler = gr_filter.rational_resampler_fff(
             interpolation=interpolation,
             decimation=decimation,
@@ -257,7 +270,7 @@ def smartnet_attach_control_dsp(top_block, audio_source, t0, pkt_cb, skip_cb, ck
 
 
         slicer = digital.binary_slicer_fb()
-        snj = smartnet_janky(t0, pkt_cb, skip_cb, cksum_cb)
+        snj = smartnet_janky(t0, pkt_cb, skip_cb, cksum_cb, offset_mag_block)
 
         top_block.connect(differential, rational_resampler, slicer, snj)
         return snj

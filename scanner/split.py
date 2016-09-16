@@ -140,7 +140,7 @@ class recording_channelizer(gr.top_block):
         pattern = "%s/audio_%d_%%s.wav" % (config["scanner"]["tmp_dir"], f_i)
 
         self.user_data[f_i] = { "tg": None, "power": 0, "power_samples": 0, "last_power": 0 }
-        self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": time.time() }
+        self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": time.time(), "offset": self.freq_offset }
 
         wav_header = wave_header(1, 8000, 8, 0)
 
@@ -233,7 +233,7 @@ class recording_channelizer(gr.top_block):
             unh = control_decoder.handle_packet(pkt)
             if unh:
                 s = str(control_decoder)
-                print "unhandled: %03x/%d: %s / %s" % (pkt["cmd"], pkt["group"], str(s), str(pkt))
+                #print "unhandled: %03x/%d: %s / %s" % (pkt["cmd"], pkt["group"], str(s), str(pkt))
 
         def skipped_cb(n):
             # print "skip: %d" % n
@@ -245,12 +245,12 @@ class recording_channelizer(gr.top_block):
             control_decoder.handle_cksum_err(pkt)
 
 
-        snj = smartnet_attach_control_dsp(self,
-                                          audio_source,
-                                          time.time(),
-                                          pkt_cb,
-                                          skipped_cb,
-                                          cksum_err_cb)
+        self.snj[f_i] = smartnet_attach_control_dsp(self,
+                                                    audio_source,
+                                                    time.time(),
+                                                    pkt_cb,
+                                                    skipped_cb,
+                                                    cksum_err_cb)
 
     def _submit(self, event_body):
         sub_json = json.dumps(event_body)
@@ -283,6 +283,7 @@ class recording_channelizer(gr.top_block):
         correction = config["scanner"]["receiver"]["freq_corr"]
         gain = config["scanner"]["receiver"]["gain"]
 
+        self.freq_offset = 0.0
 
         self.min_burst = 8000*config["scanner"]["min_burst"]
 
@@ -319,7 +320,7 @@ class recording_channelizer(gr.top_block):
 
         self.mags = {}    # freq => magnitude monitor
         self.squelch = {} # freq => squelch
-
+        self.snj = {}     # freq => snj
 
         self.control_log_tmp_dir = config["scanner"]["control_log_tmp_dir"]
         self.control_log_dir = config["scanner"]["control_log_dir"]
@@ -386,7 +387,7 @@ class recording_channelizer(gr.top_block):
             sys.exit(1)
 
         self.osmosdr_source_0.set_sample_rate(samp_rate)
-        self.osmosdr_source_0.set_center_freq(Fc, 0)
+        self.osmosdr_source_0.set_center_freq(Fc+self.freq_offset, 0)
         self.osmosdr_source_0.set_freq_corr(self.freq_corr, 0)
         self.osmosdr_source_0.set_dc_offset_mode(0, 0)
         self.osmosdr_source_0.set_iq_balance_mode(0, 0)
@@ -457,6 +458,15 @@ class recording_channelizer(gr.top_block):
         self.control_log = file(cl_path, "a")
 
 
+    def sample_offset(self):
+        for f_i in self.snj:
+            if self.squelch[f_i].unmuted():
+                errterm = self.snj[f_i].read_offset()
+                print "%d: %f: %f" % (f_i, errterm, self.freq_offset)
+                self.freq_offset += errterm*12500/8
+                self.osmosdr_source_0.set_center_freq(self.Fc+self.freq_offset, 0)
+
+
     def get_samp_rate(self):
         return self.samp_rate
 
@@ -501,7 +511,7 @@ class recording_channelizer(gr.top_block):
         self.control_counts["dt"] = int(1000*(tnow - self.control_counts["t0"]))/1000.0
 
         self._submit(self.control_counts)
-        self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": tnow }
+        self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": tnow, "offset": self.freq_offset }
 
 if __name__ == '__main__':
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
@@ -536,6 +546,7 @@ if __name__ == '__main__':
         tb.check_time_triggers()
         tb.update_powers()
 
+        tb.sample_offset()
         rounds += 1
         if 0 == rounds % 5:
             tb.splat_levels()
@@ -544,7 +555,7 @@ if __name__ == '__main__':
         if 0 == rounds % 2:
             tb.send_ping()
 #        print [ int(100*math.log10(1e-10 + tb.mags[f_i].level()))/10.0 for f_i in sorted(list(tb.mags)) ]
-        print [ "***" if tb.squelch[f_i].unmuted() else "   "  for f_i in sorted(list(tb.mags)) ]
+#        print [ "***" if tb.squelch[f_i].unmuted() else "   "  for f_i in sorted(list(tb.mags)) ]
 
         if 0 == rounds % 60:
             tb.roll_control_log()
