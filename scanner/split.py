@@ -111,7 +111,7 @@ class recording_channelizer(gr.top_block):
 
         bpf = gr_filter.fir_filter_fff(1, bpf_taps)
 
-        agc = analog.agc_ff(1e-5, 0.9, 1.0)
+        agc = analog.agc_ff(1e-5, 0.8, 1.0)
 
         rational_resampler = gr_filter.rational_resampler_fff(
             interpolation=16,
@@ -131,7 +131,7 @@ class recording_channelizer(gr.top_block):
         procaff(bpf, i)
         procaff(agc, i)
         self.connect(audio_source,
-                     #bpf,
+                     bpf,
                      agc,
                      rational_resampler,
                      f_bias,f_scale,f_to_char)
