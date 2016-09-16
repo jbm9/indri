@@ -62,6 +62,8 @@ from indri_config import IndriConfig
 from smartnet_janky import *
 from control_decoder import ControlDecoder
 
+from janky_cpumeter import CPUMeter
+
 NCORES = 4
 
 
@@ -289,6 +291,7 @@ class recording_channelizer(gr.top_block):
 
         self.perflog = file("/tmp/indri.perflog", "a")
 
+        self.cpu_meter = CPUMeter()
 
         gr.top_block.__init__(self, "Splitter")
 
@@ -537,6 +540,7 @@ class recording_channelizer(gr.top_block):
             db = int(100*math.log10(1e-10+self.mags[f_i].level()))/10.0
             content["levels"][f_i] = db
 
+        content["idle"] = self.cpu_meter.get_idle_percs()
 
         self.perflog.write(json.dumps(content) + "\n")
 
