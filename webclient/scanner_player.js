@@ -65,6 +65,33 @@ function ScannerPlayer() {
     };
     this.pauseUnpause = pause_unpause;
 
+    var notifyActiveWavTG = function(s) {
+	// Let's check if the browser supports notifications
+	if (!("Notification" in window)) {
+	    console.log("Notifications not supported.")
+	    return;
+	}
+
+	// Let's check whether notification permissions have already been granted
+	if (Notification.permission === "granted") {
+	    // If it's okay let's create a notification
+	    var notification = new Notification(s);
+	    setTimeout(notification.close.bind(notification), 5000);
+	}
+
+	// Otherwise, we need to ask the user for permission
+	else if (Notification.permission !== 'denied') {
+	    Notification.requestPermission(function (permission) {
+		// If the user accepts, let's create a notification
+		if (permission === "granted") {
+		    var notification = new Notification(s);
+		    setTimeout(notification.close.bind(notification), 5000);
+		}
+	    });
+	}
+    }
+
+
     var play = function(entry) {
 	var url = base_url + entry.filename;
 
@@ -245,6 +272,8 @@ function ScannerPlayer() {
 	    }
 
 	    curtg.text(decode);
+	    if (tgId)
+		notifyActiveWavTG(decode);
 	    curtg.css("background-color", "#ecc")
 	}
     }
