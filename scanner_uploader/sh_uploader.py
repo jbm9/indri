@@ -17,6 +17,8 @@ class ShUploader(BaseUploader):
 
         subprocess.check_call(shlex.split(cmd))
 
+        self.send_message({"type": "fileup", "path": filename})
+
         return True
 
 if __name__ == "__main__":
