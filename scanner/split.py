@@ -79,7 +79,7 @@ class recording_channelizer(gr.top_block):
             audio_rate=self.chan_rate,
             quad_rate=self.chan_rate,
             tau=75e-6,
-            max_dev=5e3,
+            max_dev=6.25e3,
         )
 
 
