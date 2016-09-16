@@ -445,7 +445,13 @@ class recording_channelizer(gr.top_block):
 
     def roll_control_log(self):
         if self.control_log:
-            self.control_log.close()
+            while True:
+                try:
+                    self.control_log.close()
+                    break
+                except IOError:
+                    time.sleep(0.01) # TODO mutexes
+
             cur_path = os.path.join(self.control_log_tmp_dir, 
                                     self.control_log_filename)
 
