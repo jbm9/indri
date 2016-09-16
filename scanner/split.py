@@ -397,7 +397,6 @@ class recording_channelizer(gr.top_block):
         	  1.0,
         	  100)
         self.pfb_channelizer_ccf_0.set_channel_map(([]))
-        self.pfb_channelizer_ccf_0.declare_sample_delay(0)
         	
         ##################################################
         # Connections
