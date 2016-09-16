@@ -208,7 +208,11 @@ class recording_channelizer(gr.top_block):
                 return
             # print "%s: %s" % (cbname, str(args))
             logline = "%s %s\n" % (cbname, " ".join(map(str, args)))
-            self.control_log.write(logline)
+            try:
+                self.control_log.write(logline)
+            except Exception, e:
+                # This sometimes races with the log cycling
+                pass
 
 
         def group_call_cb(chan, tg):
