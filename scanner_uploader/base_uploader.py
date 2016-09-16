@@ -40,7 +40,9 @@ class BaseUploader(watchdog.events.FileSystemEventHandler):
 
         self.upstream = config[config_section]["upstream"]
 
-        self.upstream_key = config[config_section]["upstream_key"] or "out_dir"
+        self.upstream_key = "out_dir"
+        if "upstream_key" in config[config_section]:
+            self.upstream_key = config[config_section]["upstream_key"]
 
         self.in_dir = config[self.upstream][self.upstream_key]
         self.tmp_dir = config[config_section]["tmp_dir"]
