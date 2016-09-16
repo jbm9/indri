@@ -48,7 +48,7 @@ class BaseUploader(watchdog.events.FileSystemEventHandler):
         self.tmp_dir = config[config_section]["tmp_dir"]
         self.dest_dir = config[config_section]["out_dir"]
         self.do_remove = config[config_section]["do_remove"]
-
+        self.no_message = config[config_section]["no_message"]
 
 
         for d in self.in_dir, self.tmp_dir, self.dest_dir:
@@ -106,9 +106,12 @@ class BaseUploader(watchdog.events.FileSystemEventHandler):
 
 
 
-    def send_message(self, msg):
+    def send_message(self, msg, force=False):
+        if not force and self.no_message:
+            return
         try:
-            unirest.get(self.base_url + "json/%s" % (json.dumps(msg)), callback=lambda x: "Isn't that nice.")
+            url = self.base_url + "json/%s" % (json.dumps(msg))
+            unirest.get(url, callback=lambda x: "Isn't that nice.")
         except urllib2.URLError, e:
             print "URL upload error! %s" % e
 

@@ -55,6 +55,7 @@ class IndriConfig:
                     "tmp_dir": "/tmp/upload_working",
                     "out_dir": "/tmp/uploaded",
                     "bucket": "indri-testbed",
+                    "no_message": False,
                     "do_remove": False
                 },
 
@@ -63,6 +64,7 @@ class IndriConfig:
                     "upstream": "upload",
                     "tmp_dir": "/tmp/archived",
                     "out_dir": "/tmp/archived",
+                    "no_message": True,
                     "do_remove": False
                 },
 
