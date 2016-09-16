@@ -34,8 +34,6 @@ function ScannerPlayer() {
 
     var uidiv = null; // <div> for our UI
 
-    var talkgroups = {}; // our talkgroup database
-
     var base_url = "http://localhost/"; // base of all WAV urls
 
     var paused = false;
@@ -191,8 +189,7 @@ function ScannerPlayer() {
 	var avg_power = response.avg_power;
 	var filename = response.path;
 
-	var interesting = (-1 == tg_follow) || 
-	    (-1 != tg_follow.indexOf(tg));
+	var interesting = talkgroups.following(tg);
 
 	if (playing && filename == playing_entry.filename) {
 	    set_current_tg(tg, avg_power);
@@ -213,7 +210,7 @@ function ScannerPlayer() {
 	    }
 	}
 	if (!got_hit) {
-	    if (printQueueDebug) console.debug("Unqualified filename: " + filename);
+	    if (printQueueDebug) console.debug("Unqualified filename: " + filename + " tg: " + tg);
 	    backlog.push({"filename": filename, 
 			  "tg": tg, 
 			  "available": false, 
@@ -270,7 +267,6 @@ function ScannerPlayer() {
 
 
 	set_current_tg(null);
-
     }
 
 
@@ -297,15 +293,6 @@ function ScannerPlayer() {
 	    any_button.text(play_anything ? "*" : "_");
 	});
     }
-
-
-    this.initTalkGroups = function(tgs_in) {
-	var i;
-	for (i = 0; i < tgs_in.length; i++) {
-	    var e = tgs_in[i];
-	    talkgroups[e.tg] = e;
-	}
-    };
 
     return this;
 };

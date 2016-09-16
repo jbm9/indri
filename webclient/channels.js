@@ -10,6 +10,7 @@ function Channel(entry) {
     var tg = 0;
     this.setTG = function(v) { tg = v; updateUI();}
 
+    this.getTG = function() { return tg; };
 
     var uidiv = undefined;
     this.getUIDiv = function() { return uidiv; }
@@ -153,6 +154,7 @@ function ChannelBoard() {
 	if (!c) return;
 
 	c.startXmit();
+	talkgroups.updateUI();
     };
 
     this.channelStop = function(response) {
@@ -160,6 +162,7 @@ function ChannelBoard() {
 	if (!c) return;
 
 	c.stopXmit();
+	talkgroups.updateUI();
     };
 
 
@@ -171,6 +174,7 @@ function ChannelBoard() {
 	if (c.isControl()) return;
 
 	c.setTG(tg);
+	talkgroups.updateUI();
     };
 
     this.channelLevels = function(response) {
@@ -182,6 +186,18 @@ function ChannelBoard() {
 	    c.setLevel(levels[f]);
 	}
     };
+
+
+    var tg_channels = function(tg) {
+	return channels.filter(function(e,i,a) { return e.getTG() == tg;});
+    }
+    this.tgChannels = tg_channels;
+
+    this.tgXmitting = function(tg) {
+	var assigned_channels = tg_channels(tg);
+
+	return assigned_channels.some(function(e,i,a) { return e.isXmit(); })
+    }
 
     return this;
 }

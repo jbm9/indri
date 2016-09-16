@@ -28,6 +28,7 @@ function ScannerApp() {
     // Talkgroup decoder ring
     //
     var scanner_talkgroups = new ScannerTalkgroups();
+    scanner_talkgroups.attachTGDiv($("#talkgroupboard"));
     scanner_config.register(scanner_talkgroups.configUpdate);
 
 
@@ -54,6 +55,8 @@ function ScannerApp() {
     channel_board.registerTalkgroups(scanner_talkgroups);
 
     scanner_config.register(channel_board.configUpdate);
+
+    scanner_talkgroups.registerChannelBoard(channel_board);
 
     scanner_connection.register("start", channel_board.channelStart);
     scanner_connection.register("stop", channel_board.channelStop);

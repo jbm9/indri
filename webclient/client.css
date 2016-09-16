@@ -21,6 +21,27 @@ body {
     background-color: #cc9;
 }
 
+.tg_followed {
+    background-color: #99c;
+}
+
+.tg_transmitting {
+    background-color: #c99;
+}
+
+.tg_followed.tg_transmitting {
+    background: repeating-linear-gradient(
+	45deg,
+	#99c,
+	#99c 10px,
+	#c99 10px,
+	#c99 20px
+    );
+}
+
+.tg_filtered {
+    display: none;
+}
 
 #nowplaying {
 }
