@@ -376,6 +376,11 @@ class recording_channelizer(gr.top_block):
 
         # Set up the RTL-SDR source
         self.osmosdr_source_0 = osmosdr.source( args="numchan=" + str(1) + " " + "" )
+
+        if not self.osmosdr_source_0.get_gain_range().values():
+            print "Looks like the RTL-SDR couldn't be opened, bailing"
+            sys.exit(1)
+
         self.osmosdr_source_0.set_sample_rate(samp_rate)
         self.osmosdr_source_0.set_center_freq(Fc, 0)
         self.osmosdr_source_0.set_freq_corr(self.freq_corr, 0)
