@@ -18,6 +18,9 @@ function ScannerApp() {
     window.setInterval(scanner_connection.updateUI, 500);
 
 
+    var scanner_settings = new ScannerSettings();
+    scanner_settings.loadFromCookie();
+
     //////////////////////////////////////////
     // stack configuration
     //
@@ -29,6 +32,7 @@ function ScannerApp() {
     //
     var scanner_talkgroups = new ScannerTalkgroups();
     scanner_talkgroups.attachTGDiv($("#talkgroupboard"));
+    scanner_talkgroups.attachSettings(scanner_settings);
     scanner_config.register(scanner_talkgroups.configUpdate);
 
 
@@ -69,6 +73,7 @@ function ScannerApp() {
 
     scanner_connection.connect(hostname);
 
+    this.settings = scanner_settings;
     this.connection = scanner_connection;
     this.config = scanner_config;
     this.player = scanner_player;

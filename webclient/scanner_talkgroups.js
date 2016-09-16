@@ -11,6 +11,8 @@ function ScannerTalkgroups() {
 
     var channel_board = null;
 
+    var settings = null; // reference to ScannerSettings
+
     this.registerChannelBoard = function(chanb) { channel_board = chanb; };
 
     var following = function(tg) {
@@ -20,11 +22,15 @@ function ScannerTalkgroups() {
 
     this.follows = function() { return tg_follows; };
 
+    var updateSettings = function() {
+	settings.set("talkgroups.follow", tg_follows);
+    }
 
     var follow_talkgroup = function(tg, skip_update) {
 	if (-1 != tg_follows.indexOf(tg)) return;
 	tg_follows.push(tg);
 	if (!skip_update) updateUI();
+	updateSettings();
     };
     this.followTalkgroup = follow_talkgroup;
 
@@ -33,6 +39,7 @@ function ScannerTalkgroups() {
 	if (-1 == tg_follows) return;
 	tg_follows.splice(i,1);
 	if (!skip_update) updateUI();
+	updateSettings();
     };
     this.unfollowTalkgroup = unfollow_talkgroup;
 
@@ -102,6 +109,13 @@ function ScannerTalkgroups() {
 
     }
     this.updateUI = updateUI;
+
+    this.attachSettings = function(scanner_settings) {
+	settings = scanner_settings;
+	var settings_followed =  settings.get("talkgroups.follow");
+
+	if (settings_followed) tg_follows = settings_followed;
+    };
 
     this.attachTGDiv = function(tgdiv_in) {
 	tgdiv = $(tgdiv_in);
