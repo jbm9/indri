@@ -287,6 +287,9 @@ class recording_channelizer(gr.top_block):
 
         self.min_burst = 8000*config["scanner"]["min_burst"]
 
+        self.perflog = file("/tmp/indri.perflog", "a")
+
+
         gr.top_block.__init__(self, "Splitter")
 
 
@@ -513,6 +516,27 @@ class recording_channelizer(gr.top_block):
         self._submit(self.control_counts)
         self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": tnow, "offset": self.freq_offset }
 
+
+    def hit_perflog(self):
+        content = { "ts": int(time.time()) }
+
+        content["cc_good"] = self.control_counts["good"]
+        content["cc_bad"] = self.control_counts["bad"]
+        content["cc_dt"] = time.time() - self.control_counts["t0"]
+
+        content["offset"] = self.freq_offset
+
+        content["levels"] = {}
+        for f_i in self.mags:
+            db = int(100*math.log10(1e-10+self.mags[f_i].level()))/10.0
+            content["levels"][f_i] = db
+
+
+        self.perflog.write(json.dumps(content) + "\n")
+
+        
+        
+
 if __name__ == '__main__':
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
     parser.add_option("-c", "--config", help="File containing config file")
@@ -546,6 +570,7 @@ if __name__ == '__main__':
         tb.check_time_triggers()
         tb.update_powers()
 
+        tb.hit_perflog()
         tb.sample_offset()
         rounds += 1
         if 0 == rounds % 5:
