@@ -1,8 +1,8 @@
 import math
 import gnuradio
 
-from indri.time_trigger import time_trigger
-from indri.timestamp_file_sink import timestamp_file_sink
+from indri.blocks.time_trigger import time_trigger
+from indri.blocks.timestamp_file_sink import timestamp_file_sink
 
 from gnuradio import blocks
 from gnuradio import analog
