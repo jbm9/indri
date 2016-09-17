@@ -8,6 +8,7 @@ function ScannerPlayer() {
 
     var playing = false;
     var playing_entry;
+    var curplaying = null; // URL of current wav
 
     var play_anything = false; // fill dead space
     this.setPlayAnything = function(v) { play_anything = v; }
@@ -94,6 +95,7 @@ function ScannerPlayer() {
 
     var play = function(entry) {
 	var url = base_url + entry.filename;
+	curplaying = { "tg": entry.tg, "filename": entry.filename };
 
 	set_current_tg("(loading) " + entry.tg, entry.avg_power);
 
@@ -135,6 +137,7 @@ function ScannerPlayer() {
 
 
     var play_next = function() {
+	curplaying = null;
 	try {
 	    if (playing) source.stop();
 	} catch(e) {
@@ -309,6 +312,14 @@ function ScannerPlayer() {
 	    });
 	});
 
+
+	var replay_button = uidiv.find("#playreplay");
+	replay_button.click(function() {
+	    if (curplaying) {
+		source.onended = function() {};
+		play(curplaying);
+	    }
+	});
 
 	var next_button = uidiv.find("#playnext");
 	next_button.click(function() {

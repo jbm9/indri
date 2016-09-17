@@ -11,7 +11,8 @@ function ScannerConnection() {
 
     var control_counts = { "good": 0,
 			   "bad": 0,
-			   "dt": 1.0 };
+			   "dt": 1.0,
+			   "offset": 0};
 
     var print_messages = false;
     this.setPrintMessages = function(v) { print_messages = v; };
@@ -35,6 +36,7 @@ function ScannerConnection() {
 	control_counts.good = response.good;
 	control_counts.bad = response.bad;
 	control_counts.dt = response.dt;
+	control_counts.offset = response.offset;
     }
 
     var handleConnected = function(response) {
@@ -143,7 +145,8 @@ function ScannerConnection() {
 
 	conn_stats_box.text(parseInt(100*good_frac)/100 + ":" +
 			    parseInt(100*seen_frac)/100 + ": " +
-			    control_counts.good + "/" + control_counts.bad);
+			    control_counts.good + "/" + control_counts.bad +
+			   " @ " + control_counts.offset);
 
     }
 
