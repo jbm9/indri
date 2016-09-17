@@ -330,12 +330,19 @@ class recording_channelizer(gr.top_block):
     def __init__(self, config):
         self.config = config
 
-        samp_rate = config["scanner"]["Fs"]
-        Fc = config["scanner"]["Fc"]
-        base_url = config["websocket_uri"]
-        threshold = config["scanner"]["threshold"]
-        correction = config["scanner"]["receiver"]["freq_corr"]
-        gain = config["scanner"]["receiver"]["gain"]
+        gr.top_block.__init__(self, "Splitter")
+
+        self.samp_rate = config["scanner"]["Fs"]
+        self.Fc = config["scanner"]["Fc"]
+        self.base_url = config["websocket_uri"]
+        self.threshold = config["scanner"]["threshold"]
+
+        self.freq_corr = config["scanner"]["receiver"]["freq_corr"]
+        self.gain = config["scanner"]["receiver"]["gain"]
+        self.gain_if = 0
+        self.gain_bb = 0
+
+        self.chan_rate = chan_rate = config["scanner"]["chan_rate"]
 
         self.freq_offset = 0.0
 
@@ -345,8 +352,6 @@ class recording_channelizer(gr.top_block):
 
         self.cpu_meter = CPUMeter()
 
-        gr.top_block.__init__(self, "Splitter")
-
         self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": time.time(), "offset": self.freq_offset }
 
         self.radio_channels = {} # freq => radio_channel object
@@ -355,29 +360,16 @@ class recording_channelizer(gr.top_block):
         ##################################################
         # Variables
         ##################################################
-        self.samp_rate = samp_rate
-        self.chan_rate = chan_rate = config["scanner"]["chan_rate"]
-        self.n_channels = n_channels = samp_rate/chan_rate
 
+        self.n_channels = self.samp_rate/self.chan_rate
 
         self.channels = config["channels"]
+
         self.channel_dict = {}
         for c in self.channels:
             self.channel_dict[c["freq"]] = c
 
-        self.Fc = Fc
-
         self.holdoff = holdoff = 0.5
-        self.threshold = threshold # = -50.0
-
-        self.base_url = base_url
-
-        self.gain = gain
-        self.gain_if = 0
-        self.gain_bb = 0
-
-        self.freq_corr = correction
-
         self.snj = {}     # freq => snj
 
         self.control_log_tmp_dir = config["scanner"]["control_log_tmp_dir"]
@@ -389,22 +381,22 @@ class recording_channelizer(gr.top_block):
         self.roll_control_log()
 
         def channelizer_frequency(i):
-            if i > n_channels/2:
-                return Fc - (n_channels - i)*chan_rate
-            return Fc + i*chan_rate
+            if i > self.n_channels/2:
+                return self.Fc - (self.n_channels - i)*self.chan_rate
+            return self.Fc + i*self.chan_rate
 
-        all_freqs = map(channelizer_frequency, range(n_channels))
+        all_freqs = map(channelizer_frequency, range(self.n_channels))
 
 
         print "#"
         print "#"
 
-        print "# Starting up scanner: Fs=%d, Fc=%d, %d~%d,Fchan=%d, n_chan=%d, threshold=%d" % (samp_rate, Fc, min(all_freqs), max(all_freqs), chan_rate, n_channels, threshold)
+        print "# Starting up scanner: Fs=%d, Fc=%d, %d~%d,Fchan=%d, n_chan=%d, threshold=%d" % (self.samp_rate, self.Fc, min(all_freqs), max(all_freqs), self.chan_rate, self.n_channels, self.threshold)
         if self.channels:
             missing_channels = set(self.channel_dict.keys())
             skipped_channels = 0
 
-            for i in range(n_channels):
+            for i in range(self.n_channels):
                 f_i = channelizer_frequency(i)
                 if f_i in self.channel_dict:
                     print "#   * %03d %d" % (i, f_i)
@@ -423,12 +415,12 @@ class recording_channelizer(gr.top_block):
         print "#"
 
 
-        self.lpf_taps = lpf_taps = firdes.low_pass(1.0,
-                                                   samp_rate,
-                                                   samp_rate/n_channels/2,
-                                                   samp_rate/n_channels/4,
-                                                   firdes.WIN_HAMMING,
-                                                   6.76)
+        self.lpf_taps = firdes.low_pass(1.0,
+                                        self.samp_rate,
+                                        self.samp_rate/self.n_channels/2,
+                                        self.samp_rate/self.n_channels/4,
+                                        firdes.WIN_HAMMING,
+                                        6.76)
 
         print "# LPF taps: %d long" % len(self.lpf_taps)
 
@@ -444,8 +436,8 @@ class recording_channelizer(gr.top_block):
             print "Looks like the RTL-SDR couldn't be opened, bailing"
             sys.exit(1)
 
-        self.osmosdr_source_0.set_sample_rate(samp_rate)
-        self.osmosdr_source_0.set_center_freq(Fc+self.freq_offset, 0)
+        self.osmosdr_source_0.set_sample_rate(self.samp_rate)
+        self.osmosdr_source_0.set_center_freq(self.Fc+self.freq_offset, 0)
         self.osmosdr_source_0.set_freq_corr(self.freq_corr, 0)
         self.osmosdr_source_0.set_dc_offset_mode(0, 0)
         self.osmosdr_source_0.set_iq_balance_mode(0, 0)
@@ -460,10 +452,10 @@ class recording_channelizer(gr.top_block):
 
         # Set up the Polyphase Filter Bank Channelizer:
         self.pfb_channelizer_ccf_0 = pfb.channelizer_ccf(
-        	  self.n_channels,
-        	  (lpf_taps),
-        	  1.0,
-        	  100)
+            self.n_channels,
+            self.lpf_taps,
+            1.0,
+            100)
         self.pfb_channelizer_ccf_0.set_channel_map(([]))
         	
         ##################################################
