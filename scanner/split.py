@@ -61,8 +61,8 @@ import os
 import json
 
 
-from smartnet_janky import *
-from control_decoder import ControlDecoder
+from indri.smartnet.smartnet_janky import *
+from indri.smartnet.control_decoder import ControlDecoder
 
 
 NCORES = 4
