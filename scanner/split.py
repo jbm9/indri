@@ -259,11 +259,13 @@ class recording_channelizer(gr.hier_block2):
 
         def started_cb(x):
             #print "Start: %s" % str(x)
-            self._submit({"type": "start", "freq": x})
+            # self._submit({"type": "start", "freq": x})
+            pass
 
         def stop_cb(x):
             #print " Stop: %s" % str(x)
-            self._submit({"type": "stop", "freq": x})
+            # self._submit({"type": "stop", "freq": x})
+            pass
 
         channel = voice_channel(
             self.chan_rate,
@@ -303,7 +305,7 @@ class recording_channelizer(gr.hier_block2):
         def group_call_cb(chan, tg):
             freq = decode_frequency_rebanded(chan)
 
-            self._submit({"type": "tune", "freq": freq, "tg": tg})
+            # self._submit({"type": "tune", "freq": freq, "tg": tg})
 
             if freq in self.radio_channels:
                 self.radio_channels[freq].tg = tg
@@ -428,6 +430,15 @@ class recording_channelizer(gr.hier_block2):
         body = { "type": "levels", "levels": self.get_levels(), "squelch": self.threshold }
         self._submit(body)
 
+    def send_channel_states(self):
+        states = {}
+        for f_i in self.radio_channels:
+            states[f_i] = [ self.radio_channels[f_i].get_db(),
+                            self.radio_channels[f_i].tg ]
+        body = { "type": "states", "states": states, "squelch": self.threshold }
+        self._submit(body)
+
+
     def send_ping(self):
         body = { "type": "ping", "ts": int(time.time()) }
         self._submit(body)
@@ -536,12 +547,14 @@ if __name__ == '__main__':
         ic.hit_perflog()
         ic.sample_offset()
         rounds += 1
+
         if 0 == rounds % 5:
-            ic.splat_levels()
+        #    ic.splat_levels()
             ic.submit_control_counts()
 
         if 0 == rounds % 2:
             ic.send_ping()
+            ic.send_channel_states()
 
         if 0 == rounds % 60:
             ic.roll_control_log()
