@@ -72,36 +72,82 @@ def procaff(b, i):
     procmask[i%NCORES] = 1
     b.set_processor_affinity(procmask)
 
-class recording_channelizer(gr.top_block):
-    def attach_audio_channel(self, f_i, i):
-        chain = []
+class radio_channel(gr.hier_block2):
+    def __init__(self, chan_rate, threshold, freq):
+        gr.hier_block2.__init__(self, "indri_radio_channel",
+                                gr.io_signature(1,1,gr.sizeof_gr_complex),
+                                gr.io_signature(1,1,gr.sizeof_float))
 
-        pwr_squelch = analog.pwr_squelch_cc(self.threshold, 0.001, 0, True)
-        nbfm_rx = analog.nbfm_rx(
+        self.chan_rate = chan_rate
+        self.threshold = threshold
+        self.freq = freq
+
+        self.pwr_squelch = analog.pwr_squelch_cc(self.threshold, 0.001, 0, True)
+
+        self.nbfm_rx = analog.nbfm_rx(
             audio_rate=self.chan_rate,
             quad_rate=self.chan_rate,
             tau=75e-6,
             max_dev=6.25e3,
         )
 
+        self.power_probe = analog.probe_avg_mag_sqrd_cf(self.threshold, 0.001)
+        self.null_sink = blocks.null_sink(gr.sizeof_float)
 
-        power_probe = gnuradio.analog.probe_avg_mag_sqrd_cf(self.threshold, 0.001)
-        null_sink = blocks.null_sink(gr.sizeof_float)
+        self.tg = 0
 
-        self.mags[f_i] = power_probe
-        self.squelch[f_i] = pwr_squelch
+        self.power_samples = 0
+        self.power_total = 0.0
 
+        self.connect(self,
+                     self.power_probe,
+                     self.null_sink)
+
+
+        self.connect(self,
+                     self.pwr_squelch,
+                     self.nbfm_rx,
+                     self)
+
+    def power_sample(self):
+        if not self.unmuted():
+            return
+        self.power_total += self.get_db()
+        self.power_samples += 1
+
+    def reset_power_samples(self):
+        if not self.power_samples:
+            return -100.0
+
+        avg_power = self.power_total / self.power_samples
+        self.power_total = 0.0
+        self.power_samples = 0
+
+        return avg_power
+
+    def unmuted(self):
+        return self.pwr_squelch.unmuted()
+
+    def get_db(self):
+        db = int(100*math.log10(1e-10 + self.power_probe.level()))/10.0
+        return db
+
+    def set_threshold(self, newthreshold):
+        self.threshold = newthreshold
+        self.pwr_squelch.set_db(newthreshold)
+        self.power_probe.set_threshold_db(newthreshold)
+
+
+class recording_channelizer(gr.top_block):
+    def attach_radio_channel(self, f_i, i):
+
+        channel = radio_channel(self.chan_rate, self.threshold, f_i)
         self.connect((self.pfb_channelizer_ccf_0, i),
-                     power_probe,
-                     null_sink)
+                     channel)
 
+        procaff(channel, i)
 
-        self.connect((self.pfb_channelizer_ccf_0, i),
-                     pwr_squelch, nbfm_rx)
-
-        procaff(nbfm_rx, i)
-
-        return nbfm_rx
+        return channel
 
     def attach_voice_finals(self, f_i, i, audio_source):
 
@@ -141,27 +187,14 @@ class recording_channelizer(gr.top_block):
 
         pattern = "%s/audio_%d_%%s.wav" % (config["scanner"]["tmp_dir"], f_i)
 
-        self.user_data[f_i] = { "tg": None, "power": 0, "power_samples": 0, "last_power": 0 }
         self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": time.time(), "offset": self.freq_offset }
 
         wav_header = wave_header(1, 8000, 8, 0)
 
         def wave_fixup_cb(fd, n_samples, path):
             wave_fixup_length(fd)
-            tg = 0
-            avg_power = -100.0
-
-            if self.user_data[f_i]["tg"]:
-                tg = self.user_data[f_i]["tg"]
-                self.user_data[f_i]["tg"] = None
-
-                if self.user_data[f_i]["power_samples"]:
-                    sum_power = self.user_data[f_i]["power"]
-                    n = self.user_data[f_i]["power_samples"]
-                    avg_power = sum_power / n
-
-                    self.user_data[f_i]["power"] = 0.0
-                    self.user_data[f_i]["power_samples"] = 0
+            tg = self.radio_channels[f_i].tg
+            avg_power = self.radio_channels[f_i].reset_power_samples()
 
             if n_samples < self.min_burst:
                 print "\t\tTOO SHORT: talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path)
@@ -222,8 +255,8 @@ class recording_channelizer(gr.top_block):
 
             self._submit({"type": "tune", "freq": freq, "tg": tg})
 
-            if freq in self.user_data:
-                self.user_data[freq]["tg"] = tg
+            if freq in self.radio_channels:
+                self.radio_channels[freq].tg = tg
 
             print_cb("group_call", [chan, tg])
 
@@ -268,14 +301,8 @@ class recording_channelizer(gr.top_block):
 
 
     def update_powers(self):
-        for f_i in self.channel_dict:
-            if f_i in self.squelch and f_i in self.user_data:
-                if self.squelch[f_i].unmuted():
-                    # we'll take a geometric mean here, because laziness
-                    m = 10.0*math.log10(1e-10 + self.mags[f_i].level())
-                    self.user_data[f_i]["power"] += m
-                    self.user_data[f_i]["power_samples"] += 1
-
+        for c in self.radio_channels.values():
+            c.power_sample()
 
     def __init__(self, config):
         samp_rate = config["scanner"]["Fs"]
@@ -295,6 +322,8 @@ class recording_channelizer(gr.top_block):
 
         gr.top_block.__init__(self, "Splitter")
 
+
+        self.radio_channels = {} # freq => radio_channel object
 
         ##################################################
         # Variables
@@ -322,10 +351,6 @@ class recording_channelizer(gr.top_block):
 
         self.freq_corr = correction
 
-        self.user_data = {} # freq => misc metdata (used here for talkgroup)
-
-        self.mags = {}    # freq => magnitude monitor
-        self.squelch = {} # freq => squelch
         self.snj = {}     # freq => snj
 
         self.control_log_tmp_dir = config["scanner"]["control_log_tmp_dir"]
@@ -429,7 +454,8 @@ class recording_channelizer(gr.top_block):
             f_i = channelizer_frequency(i)
 
             if not self.channels or f_i in self.channel_dict:
-                audio_source = self.attach_audio_channel(f_i, i)
+                audio_source = self.attach_radio_channel(f_i, i)
+                self.radio_channels[f_i] = audio_source
 
                 c = self.channel_dict[f_i]
                 if c["is_control"]:
@@ -472,7 +498,7 @@ class recording_channelizer(gr.top_block):
 
     def sample_offset(self):
         for f_i in self.snj:
-            if self.squelch[f_i].unmuted():
+            if self.radio_channels[f_i].unmuted():
                 errterm = self.snj[f_i].read_offset()
                 print "%d: %f: %f" % (f_i, errterm, self.freq_offset)
                 self.freq_offset += errterm*12500/8
@@ -504,13 +530,14 @@ class recording_channelizer(gr.top_block):
         self.lpf_taps = lpf_taps
         self.pfb_channelizer_ccf_0.set_taps((self.lpf_taps))
 
+    def get_levels(self):
+        retval = {} # f => dB
+        for f_i in self.radio_channels:
+            retval[f_i] = self.radio_channels[f_i].get_db()
+        return retval
 
     def splat_levels(self):
-        levels = {}
-        for f_i in self.mags:
-            levels[f_i] = int(1e-10 + 100*math.log10(self.mags[f_i].level()))/10.0
-
-        body = { "type": "levels", "levels": levels, "squelch": self.threshold }
+        body = { "type": "levels", "levels": self.get_levels(), "squelch": self.threshold }
         self._submit(body)
 
     def send_ping(self):
@@ -535,10 +562,7 @@ class recording_channelizer(gr.top_block):
 
         content["offset"] = self.freq_offset
 
-        content["levels"] = {}
-        for f_i in self.mags:
-            db = int(100*math.log10(1e-10+self.mags[f_i].level()))/10.0
-            content["levels"][f_i] = db
+        content["levels"] = self.get_levels()
 
         content["idle"] = self.cpu_meter.get_idle_percs()
 
@@ -589,8 +613,6 @@ if __name__ == '__main__':
 
         if 0 == rounds % 2:
             tb.send_ping()
-#        print [ int(100*math.log10(1e-10 + tb.mags[f_i].level()))/10.0 for f_i in sorted(list(tb.mags)) ]
-#        print [ "***" if tb.squelch[f_i].unmuted() else "   "  for f_i in sorted(list(tb.mags)) ]
 
         if 0 == rounds % 60:
             tb.roll_control_log()
