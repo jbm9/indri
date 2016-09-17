@@ -41,11 +41,12 @@ from gnuradio.filter import firdes
 from gnuradio.filter import pfb
 from optparse import OptionParser
 
-from wavheader import wave_header, wave_fixup_length
-
 import indri
 from indri.channels import radio_channel, voice_channel
 from indri.config import IndriConfig
+
+from indri.misc.janky_cpumeter import CPUMeter
+from indri.misc.wavheader import wave_header, wave_fixup_length
 
 from collections import defaultdict
 
@@ -63,7 +64,6 @@ import json
 from smartnet_janky import *
 from control_decoder import ControlDecoder
 
-from janky_cpumeter import CPUMeter
 
 NCORES = 4
 
