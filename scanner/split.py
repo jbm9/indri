@@ -138,21 +138,19 @@ class radio_channel(gr.hier_block2):
         self.power_probe.set_threshold_db(newthreshold)
 
 
-class recording_channelizer(gr.top_block):
-    def attach_radio_channel(self, f_i, i):
+class voice_channel(gr.hier_block2):
+    def __init__(self, chan_rate, target_dir, freq, holdoff, file_header, file_cb, start_cb, stop_cb):
+        gr.hier_block2.__init__(self, "indri_voice_channel",
+                                gr.io_signature(1,1,gr.sizeof_float),
+                                gr.io_signature(0,0,0))
 
-        channel = radio_channel(self.chan_rate, self.threshold, f_i)
-        self.connect((self.pfb_channelizer_ccf_0, i),
-                     channel)
+        self.connect(self, blocks.null_sink(gr.sizeof_float))
 
-        procaff(channel, i)
+        self.target_dir = target_dir
+        self.freq = freq
+        self.holdoff = holdoff
 
-        return channel
-
-    def attach_voice_finals(self, f_i, i, audio_source):
-
-
-        bpf_taps = firdes.band_pass(1, self.chan_rate,
+        bpf_taps = firdes.band_pass(1, chan_rate,
                                     300.0, 2000.0, 100,
                                     firdes.WIN_HAMMING,
                                     6.76)
@@ -172,29 +170,49 @@ class recording_channelizer(gr.top_block):
         f_scale = blocks.multiply_const_ff(125.0)
         f_to_char = blocks.float_to_uchar()
 
-        procaff(rational_resampler, i)
-        procaff(f_bias, i)
-        procaff(f_scale, i)
-        procaff(f_to_char, i)
-        procaff(bpf, i)
-        procaff(agc, i)
-        self.connect(audio_source,
+        self.connect(self,
                      bpf,
                      agc,
                      rational_resampler,
                      f_bias,f_scale,f_to_char)
 
+        pattern = "%s/audio_%d_%%s.wav" % (self.target_dir, self.freq)
+        ttrig = time_trigger(self.holdoff, start_cb, stop_cb, self.freq)
+        self.time_trigger = ttrig
 
-        pattern = "%s/audio_%d_%%s.wav" % (config["scanner"]["tmp_dir"], f_i)
+        afile_sink = timestamp_file_sink(pattern,
+                                         self.holdoff,
+                                         header=file_header,
+                                         final_cb=file_cb)
 
-        self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": time.time(), "offset": self.freq_offset }
+        self.connect(f_to_char, afile_sink)
+        self.connect(f_to_char, ttrig)
+
+    def poll_end(self):
+        self.time_trigger.poll_end()
+
+class recording_channelizer(gr.top_block):
+    def attach_radio_channel(self, f_i, i):
+
+        channel = radio_channel(self.chan_rate, self.threshold, f_i)
+        self.connect((self.pfb_channelizer_ccf_0, i),
+                     channel)
+
+        procaff(channel, i)
+
+        return channel
+
+    def attach_voice_finals(self, f_i, i, audio_source):
 
         wav_header = wave_header(1, 8000, 8, 0)
 
         def wave_fixup_cb(fd, n_samples, path):
             wave_fixup_length(fd)
-            tg = self.radio_channels[f_i].tg
-            avg_power = self.radio_channels[f_i].reset_power_samples()
+            tg = 0
+            avg_power = -100
+            if f_i in self.radio_channels:
+                tg = self.radio_channels[f_i].tg
+                avg_power = self.radio_channels[f_i].reset_power_samples()
 
             if n_samples < self.min_burst:
                 print "\t\tTOO SHORT: talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path)
@@ -205,7 +223,7 @@ class recording_channelizer(gr.top_block):
             print "\t\tClosed out talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path)
 
             filename = path.split("/")[-1]
-            newpath = "%s/%s" % (config["scanner"]["out_dir"], filename)
+            newpath = "%s/%s" % (self.config["scanner"]["out_dir"], filename)
             os.rename(path, newpath)
 
             msg = { "type": "tgfile", "tg": tg, "path": filename, "avg_power": avg_power }
@@ -213,25 +231,30 @@ class recording_channelizer(gr.top_block):
             self._submit(msg)
 
         def started_cb(x):
-            # print "Start: %s" % str(x)
+            #print "Start: %s" % str(x)
             self._submit({"type": "start", "freq": x})
 
         def stop_cb(x):
-            # print " Stop: %s" % str(x)
+            #print " Stop: %s" % str(x)
             self._submit({"type": "stop", "freq": x})
 
-        ttrig = time_trigger(self.holdoff, started_cb, stop_cb, f_i)
-        self.time_triggers.append(ttrig)
+        channel = voice_channel(
+            self.chan_rate,
+            self.config["scanner"]["tmp_dir"],
+            f_i,
+            self.holdoff,
+            wav_header,
+            wave_fixup_cb,
+            started_cb,
+            stop_cb
+            )
 
+        procaff(channel, i)
 
-        afile_sink = timestamp_file_sink(pattern,
-                                         self.holdoff,
-                                         header=wav_header,
-                                         final_cb=wave_fixup_cb)
-        #procaff(afile_sink, i)
-        #procaff(ttrig, i)
-        self.connect(f_to_char, afile_sink)
-        self.connect(f_to_char, ttrig)
+        self.voice_channels[f_i] = channel
+        self.connect(self.radio_channels[f_i],
+                     self.voice_channels[f_i])
+
 
 
 
@@ -305,6 +328,8 @@ class recording_channelizer(gr.top_block):
             c.power_sample()
 
     def __init__(self, config):
+        self.config = config
+
         samp_rate = config["scanner"]["Fs"]
         Fc = config["scanner"]["Fc"]
         base_url = config["websocket_uri"]
@@ -322,8 +347,10 @@ class recording_channelizer(gr.top_block):
 
         gr.top_block.__init__(self, "Splitter")
 
+        self.control_counts = { "type": "control_counts", "good": 0, "bad": 0, "t0": time.time(), "offset": self.freq_offset }
 
         self.radio_channels = {} # freq => radio_channel object
+        self.voice_channels = {} # freq => voice_channel object
 
         ##################################################
         # Variables
@@ -447,30 +474,27 @@ class recording_channelizer(gr.top_block):
 
         self.run_time = time.time()
 
-        self.time_triggers = []
-
         chains = []
         for i in range(self.n_channels):
             f_i = channelizer_frequency(i)
 
             if not self.channels or f_i in self.channel_dict:
-                audio_source = self.attach_radio_channel(f_i, i)
-                self.radio_channels[f_i] = audio_source
+                radio_source = self.attach_radio_channel(f_i, i)
+                self.radio_channels[f_i] = radio_source
 
                 c = self.channel_dict[f_i]
                 if c["is_control"]:
-                    self.attach_control_finals(f_i, audio_source)
+                    self.attach_control_finals(f_i, radio_source)
                 else:
-                    self.attach_voice_finals(f_i, i, audio_source)
+                    self.attach_voice_finals(f_i, i, radio_source)
 
             else:
                 null_sink = blocks.null_sink(gr.sizeof_gr_complex)
                 self.connect((self.pfb_channelizer_ccf_0, i), null_sink)
 
     def check_time_triggers(self):
-        for ttrig in self.time_triggers:
-            ttrig.poll_end()
-
+        for c in self.voice_channels.values():
+            c.poll_end()
 
     def roll_control_log(self):
         if self.control_log:
