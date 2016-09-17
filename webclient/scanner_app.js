@@ -66,6 +66,7 @@ function ScannerApp() {
     scanner_connection.register("stop", channel_board.channelStop);
     scanner_connection.register("tune", channel_board.channelTag);
     scanner_connection.register("levels", channel_board.channelLevels);
+    scanner_connection.register("states", channel_board.channelStates);
 
 
     //////////////////////////////////////////

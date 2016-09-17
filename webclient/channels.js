@@ -64,7 +64,11 @@ function Channel(entry) {
     this.updateUI = updateUI;
 
     this.setNote = function(n) { note = n; updateUI(); }
-    this.setLevel = function(l) { level = l; updateUI(); }
+    this.setLevel = function(l, squelch) { 
+	level = l; 
+	if (squelch) xmitting = (level > squelch);
+	updateUI(); 
+    }
 
     var addClass = function(k) { if(uidiv) uidiv.classList.add(k); }
 
@@ -152,6 +156,7 @@ function ChannelBoard() {
     this.channelStart = function(response) {
 	var c = channelIndex[response.freq];
 	if (!c) return;
+	if (c.isXmit) return;
 
 	c.startXmit();
 	talkgroups.updateUI();
@@ -160,6 +165,7 @@ function ChannelBoard() {
     this.channelStop = function(response) {
 	var c = channelIndex[response.freq];
 	if (!c) return;
+	if (!c.isXmit) return;
 
 	c.stopXmit();
 	talkgroups.updateUI();
@@ -172,6 +178,7 @@ function ChannelBoard() {
 
 	var tg = response.tg;
 	if (c.isControl()) return;
+	if (c.getTG() == tg) return;
 
 	c.setTG(tg);
 	talkgroups.updateUI();
@@ -187,6 +194,22 @@ function ChannelBoard() {
 	}
     };
 
+    this.channelStates = function(response) {
+	var squelch = response.squelch;
+	var states = response.states;
+
+	for (var f in states) {
+	    var r = states[f];
+	    var level = r[0];
+	    var tg = r[1];
+
+	    var c = channelIndex[f];
+	    if (!c) continue;
+
+	    c.setTG(tg);
+	    c.setLevel(level, squelch);
+	}
+    };
 
     var tg_channels = function(tg) {
 	return channels.filter(function(e,i,a) { return e.getTG() == tg;});
