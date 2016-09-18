@@ -19,6 +19,21 @@ class deframer(gr.sync_block):
         self.skipped_cb = skipped_cb
         self.cksum_err_cb = cksum_err_cb
 
+        self.counts = { "good": 0, "bad": 0, "nsamples": 0 }
+
+
+    def fetch_counts(self):
+        dsamples = self.nsamples - self.counts["nsamples"]
+        exp = dsamples / self.FRAME_LEN
+
+        retval = { "good": self.counts["good"],
+                   "bad": self.counts["bad"],
+                   "exp": exp }
+
+        self.counts = { "good": 0, "bad": 0, "nsamples": self.nsamples }
+
+        return retval
+
 
     def _find_preamble(self, a):
         for i in range(len(a) - len(self.PREAMBLE)):
@@ -174,10 +189,12 @@ class deframer(gr.sync_block):
                     self.packet_cb(g)
 
                 #print str(g)
+                self.counts["good"] += 1
                 self.nsamples += self.FRAME_LEN
                 return self.FRAME_LEN
             else:
                 #print "\tBogus checksum: %x / %x / %x" % (g["cksum"], g["cksum_e"], g["cksum"] ^ g["cksum_e"])
+                self.counts["bad"] += 1
                 if self.cksum_err_cb:
                     self.cksum_err_cb(g)
                 #print g

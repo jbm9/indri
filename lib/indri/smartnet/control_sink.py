@@ -26,3 +26,7 @@ class control_sink(gr.hier_block2):
 
     def read_offset(self):
         return self.control_channel.read_offset()
+
+
+    def control_counts(self):
+        return self.deframer.fetch_counts()
