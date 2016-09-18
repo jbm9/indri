@@ -14,6 +14,9 @@ import logging
 from tornado import ioloop, web, websocket
 import tornado.escape
 
+import datetime
+import time
+
 Gconfig = None
 Gconfigpath = None
 
@@ -56,7 +59,7 @@ g_channel_states = ChannelStates()
 
 class PostHandler(web.RequestHandler):
     def get(self, args):
-        print "get(%s)" % args
+        print "%d: get(%s)" % (time.time(), args)
 
         args = args.strip("/")
         arglist = args.split("/")
@@ -102,6 +105,7 @@ class PostHandler(web.RequestHandler):
 
 
 class WebSocketServer(websocket.WebSocketHandler):
+    KA = json.dumps({"type": "ka"})
     def check_origin(self, origin):
         return True
 
@@ -115,6 +119,16 @@ class WebSocketServer(websocket.WebSocketHandler):
         self.write_message(json.dumps({ 'type': 'connected',
                                         'states': g_channel_states.get_states() }))
 
+        tornado.ioloop.IOLoop.instance().add_timeout(datetime.timedelta(seconds=2), self.ka)
+
+
+    def ka(self):
+        # print "%d: Keepalive: %s" % (time.time(), str(self))
+        try:
+            self.write_message(self.KA)
+            tornado.ioloop.IOLoop.instance().add_timeout(datetime.timedelta(seconds=2), self.ka)
+        except websocket.WebSocketClosedError:
+            pass
 
     def on_message(self, message):
         try:
@@ -194,4 +208,5 @@ if __name__ == '__main__':
     application.log.addHandler(handler)
 
     application.listen(8081)
-    ioloop.IOLoop.instance().start()
+    main_loop = ioloop.IOLoop.instance()
+    main_loop.start()
