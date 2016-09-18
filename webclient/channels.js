@@ -209,6 +209,7 @@ function ChannelBoard() {
 	    c.setTG(tg);
 	    c.setLevel(level, squelch);
 	}
+	talkgroups.updateUI();
     };
 
     var tg_channels = function(tg) {
