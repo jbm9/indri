@@ -1,70 +1,24 @@
+from gnuradio import gr
 import numpy
-from gnuradio import gr
 
-from gnuradio import blocks
-from gnuradio import analog
-from gnuradio import digital
-from gnuradio import filter as gr_filter
-from gnuradio import eng_notation
-from gnuradio import gr
-from gnuradio.eng_option import eng_option
-from gnuradio.filter import firdes
-from gnuradio.filter import pfb
-
-
-def decode_frequency_rebanded(cmd):
-    # Based on http://home.ica.net/~phoenix/wap/TRUNK88/Motorola%20Channel%20Numbers.txt
-    if cmd <= 0x1B7:
-        return 851012500 + 25000*cmd
-    if cmd <= 0x22F:
-        return 851025000 + 25000*(cmd-0x1B8)
-    if cmd <= 0x2CF:
-        return 865012500 + 25000*(cmd-0x230)
-    if cmd <= 0x2F7:
-        return 866000000 + 25000*(cmd-0x2D0)
-    if cmd <= 0x32E:
-        return 0 # Bogon
-    if cmd <= 0x33F:
-        return 867000000 + 25000*(cmd-0x32F)
-    if cmd <= 0x3BD:
-        return 0 # Bogon
-    if cmd == 0x3BE:
-        return 868975000
-    if cmd <= 0x3C0:
-        return 0
-    if cmd <= 0x3FE:
-        return 867425000 + 25000*(cmd-0x3C0)
-    if cmd == 0x3FF:
-        return 0
-
-    return 0
-
-class smartnet_janky(gr.sync_block):
+class deframer(gr.sync_block):
     PREAMBLE = [1,0,1,0,1,1,0,0]
     PREAMBLE_LEN = len(PREAMBLE)
     FRAME_LEN = 84
     BODY_LEN = FRAME_LEN - PREAMBLE_LEN
 
-    def __init__(self, t0=0, packet_cb=None, skipped_cb=None, cksum_err_cb=None, offset_mag=None):
-        gr.sync_block.__init__(self, "smartnet_janky",
+    def __init__(self, packet_cb=None, skipped_cb=None, cksum_err_cb=None):
+        gr.sync_block.__init__(self, "indri_smartnet_deframer",
                                 in_sig=[numpy.byte],
                                 out_sig=None)
 
         self.set_history(self.FRAME_LEN)
-        self.t0 = t0
         self.nsamples = 0
 
         self.packet_cb = packet_cb
         self.skipped_cb = skipped_cb
         self.cksum_err_cb = cksum_err_cb
 
-        self.offset_mag = offset_mag
-
-    def read_offset(self):
-        if not self.offset_mag:
-            return 0.0
-
-        return self.offset_mag.level()
 
     def _find_preamble(self, a):
         for i in range(len(a) - len(self.PREAMBLE)):
@@ -190,10 +144,6 @@ class smartnet_janky(gr.sync_block):
 
         return retval
 
-
-    def time(self):
-        return self.t0 + self.nsamples/3600.0
-
     def work(self, input_items, output_items):
         inbuf = input_items[0]
         # print len(inbuf)
@@ -206,7 +156,6 @@ class smartnet_janky(gr.sync_block):
             if self.skipped_cb:
                 self.skipped_cb(len(inbuf))
             return len(inbuf)
-        timestamp = self.t0 + (self.nsamples+preamble_at)/3600.0
 
         # print preamble_at, len(inbuf)
 
@@ -244,49 +193,3 @@ class smartnet_janky(gr.sync_block):
                 self.skipped_cb(preamble_at)
             # print "\tSkipped: %d" % preamble_at
             return preamble_at
-
-def smartnet_attach_control_dsp(top_block, audio_source, t0, pkt_cb, skip_cb, cksum_cb, interpolation=36, decimation=125):
-
-
-        # Figure out where zero should be, despite RTL-SDR drift
-        avglen = 1000 # should be big enough to catch drifts
-        offset = blocks.moving_average_ff(avglen, 1.0/avglen, 40*avglen)
-        differential = blocks.sub_ff()
-        top_block.connect(audio_source, (differential,0))
-        top_block.connect(audio_source, offset)
-        top_block.connect(offset, (differential,1))
-
-        # sample off the offsets to adjust tuning
-        offset_sampler = blocks.keep_one_in_n(gr.sizeof_float, 10*avglen)
-        offset_mag_block = blocks.probe_signal_f()
-        top_block.connect(offset, offset_sampler, offset_mag_block)
-
-        rational_resampler = gr_filter.rational_resampler_fff(
-            interpolation=interpolation,
-            decimation=decimation,
-            taps=None,
-            fractional_bw=0.45,
-        )
-
-
-        slicer = digital.binary_slicer_fb()
-        snj = smartnet_janky(t0, pkt_cb, skip_cb, cksum_cb, offset_mag_block)
-
-        top_block.connect(differential, rational_resampler, slicer, snj)
-        return snj
-
-
-    
-
-
-
-def smartnet_pkt_print(g):
-    raw_addr = g["idno"]
-    talkgroup = raw_addr & ~0xF
-    flags = raw_addr & 0xF
-    freq = 0
-    cmd = int(g["cmd"], 16)
-    if cmd < 0x2d0:
-        freq = 851.0125 + 0.025*cmd
-
-    print "%d CC id=%s / tg=%d => cmd=%s / g=%s / f=%x / freq=%f" % (timestamp, str(g["idno"]), talkgroup, str(g["cmd"]), str(g["group"]), flags, freq)

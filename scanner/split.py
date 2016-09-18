@@ -41,12 +41,13 @@ from gnuradio.filter import firdes
 from gnuradio.filter import pfb
 from optparse import OptionParser
 
-import indri
-from indri.channels import radio_channel, voice_channel
 from indri.config import IndriConfig
+from indri.channels import radio_channel, voice_channel
+from indri.smartnet.control_sink import control_sink
 
 from indri.misc.janky_cpumeter import CPUMeter
 from indri.misc.wavheader import wave_header, wave_fixup_length
+from indri.smartnet.util import decode_frequency_rebanded
 
 from collections import defaultdict
 
@@ -61,8 +62,6 @@ import os
 import json
 
 
-from indri.smartnet.smartnet_janky import *
-from indri.smartnet.control_decoder import ControlDecoder
 
 
 NCORES = 4
@@ -124,7 +123,7 @@ class recording_channelizer(gr.hier_block2):
             self.channel_dict[c["freq"]] = c
 
         self.holdoff = holdoff = 0.5
-        self.snj = {}     # freq => snj
+        self.control_sinks = {}     # freq => control sinks
 
         self.control_log_tmp_dir = config["scanner"]["control_log_tmp_dir"]
         self.control_log_dir = config["scanner"]["control_log_dir"]
@@ -288,8 +287,6 @@ class recording_channelizer(gr.hier_block2):
 
 
     def attach_control_finals(self, f_i, audio_source):
-        control_decoder = ControlDecoder()
-
         def print_cb(cbname, args):
             if not self.control_log:
                 return
@@ -312,32 +309,10 @@ class recording_channelizer(gr.hier_block2):
 
             print_cb("group_call", [chan, tg])
 
-        control_decoder.register_cb("group_call", group_call_cb)
-        control_decoder.register_cb("*", print_cb)
-
-        def pkt_cb(pkt):
-            self.control_counts["good"] += 1
-            unh = control_decoder.handle_packet(pkt)
-            if unh:
-                s = str(control_decoder)
-                #print "unhandled: %03x/%d: %s / %s" % (pkt["cmd"], pkt["group"], str(s), str(pkt))
-
-        def skipped_cb(n):
-            # print "skip: %d" % n
-            control_decoder.handle_skip(n)
-
-        def cksum_err_cb(pkt):
-            # print "cksum:"
-            self.control_counts["bad"] += 1
-            control_decoder.handle_cksum_err(pkt)
-
-
-        self.snj[f_i] = smartnet_attach_control_dsp(self,
-                                                    audio_source,
-                                                    time.time(),
-                                                    pkt_cb,
-                                                    skipped_cb,
-                                                    cksum_err_cb)
+        self.control_sinks[f_i] = control_sink()
+        self.control_sinks[f_i].register_cb("group_call", group_call_cb)
+        self.control_sinks[f_i].register_cb("*", print_cb)
+        self.connect(audio_source, self.control_sinks[f_i])
 
     def _submit(self, event_body):
         sub_json = json.dumps(event_body)
@@ -386,9 +361,9 @@ class recording_channelizer(gr.hier_block2):
 
 
     def sample_offset(self):
-        for f_i in self.snj:
+        for f_i in self.control_sinks:
             if self.radio_channels[f_i].unmuted():
-                errterm = self.snj[f_i].read_offset()
+                errterm = self.control_sinks[f_i].read_offset()
                 print "%d: %f: %f" % (f_i, errterm, self.freq_offset)
                 self.freq_offset += errterm*12500/8
                 self.tune_offset_cb(self.freq_offset)

@@ -9,7 +9,7 @@
 # (Outbound Signalling Words) by radioreference user slicerwizard:
 # http://forums.radioreference.com/voice-control-channel-decoding-software/132039-control-channel-decoding-help.html
 
-class ControlDecoder:
+class control_decoder:
     STATE_ANY = 0 # used for wildcard rules
     STATE_IDLE = 1
 
