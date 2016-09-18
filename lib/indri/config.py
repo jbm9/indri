@@ -37,6 +37,8 @@ class IndriConfig:
                     "Fc": 851600000,
                     "Fs": 1000000,
 
+                    "self_upload": True, # if you're not using uploaders and have out_dir available on a webserver
+
 
                     "receiver": { 
                         "type": "rtl-sdr",
