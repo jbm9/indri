@@ -101,7 +101,7 @@ class voice_channel(gr.hier_block2):
 
         bpf = gr_filter.fir_filter_fff(1, bpf_taps)
 
-        agc = analog.agc_ff(1e-5, 0.8, 1.0)
+        agc = analog.agc_ff(1e-5, 0.6, 1.0)
 
         rational_resampler = gr_filter.rational_resampler_fff(
             interpolation=16,
