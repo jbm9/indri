@@ -115,8 +115,8 @@ class voice_channel(gr.hier_block2):
         f_to_char = blocks.float_to_uchar()
 
         self.connect(self,
-                     bpf,
-                     agc,
+                     #bpf,
+                     #agc,
                      rational_resampler,
                      f_bias,f_scale,f_to_char)
 
