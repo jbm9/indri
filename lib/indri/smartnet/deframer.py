@@ -182,7 +182,7 @@ class deframer(gr.sync_block):
             g = self._parse(inbuf[:self.FRAME_LEN])
 
             if g is None:
-                print "BOGON: " + "".join(map(str, inbuf[:self.FRAME_LEN]))
+                logging.debug("BOGON: " + "".join(map(str, inbuf[:self.FRAME_LEN])))
 
             if g is not None and g["cksum"] == g["cksum_e"]:
                 if self.packet_cb:

@@ -1,5 +1,7 @@
 import errno
 
+import logging
+
 from gnuradio import blocks
 from gnuradio import gr
 from gnuradio.eng_option import eng_option
@@ -85,10 +87,7 @@ class recording_channelizer(gr.hier_block2):
         all_freqs = map(channelizer_frequency, range(self.n_channels))
 
 
-        print "#"
-        print "#"
-
-        print "# Starting up scanner: Fs=%d, Fc=%d, %d~%d,Fchan=%d, n_chan=%d, threshold=%d" % (self.samp_rate, self.Fc, min(all_freqs), max(all_freqs), self.chan_rate, self.n_channels, self.threshold)
+        logging.info("Starting up scanner: Fs=%d, Fc=%d, %d~%d,Fchan=%d, n_chan=%d, threshold=%d" % (self.samp_rate, self.Fc, min(all_freqs), max(all_freqs), self.chan_rate, self.n_channels, self.threshold))
         if self.channels:
             missing_channels = set(self.channel_dict.keys())
             skipped_channels = 0
@@ -96,21 +95,17 @@ class recording_channelizer(gr.hier_block2):
             for i in range(self.n_channels):
                 f_i = channelizer_frequency(i)
                 if f_i in self.channel_dict:
-                    print "#   * %03d %d" % (i, f_i)
+                    logging.debug("  * %03d %d" % (i, f_i))
                     missing_channels.remove(f_i)
                 else:
                     skipped_channels += 1
 
-            print "#   Skipped %d channels" % skipped_channels
+            logging.info("   Skipped %d channels" % skipped_channels)
 
-            print "#   Input channels missing:"
+            logging.info("   Input channels missing:")
 
             for f_i in sorted(list(missing_channels)):
-                print "#   ! ___ %d" % f_i
-
-        print "#"
-        print "#"
-
+                logging.info("   ! ___ %d" % f_i)
 
         self.lpf_taps = firdes.low_pass(1.0,
                                         self.samp_rate,
@@ -119,7 +114,7 @@ class recording_channelizer(gr.hier_block2):
                                         firdes.WIN_HAMMING,
                                         6.76)
 
-        print "# LPF taps: %d long" % len(self.lpf_taps)
+        logging.debug(" LPF taps: %d long" % len(self.lpf_taps))
 
 
         ##################################################
@@ -181,12 +176,12 @@ class recording_channelizer(gr.hier_block2):
                 avg_power = self.radio_channels[f_i].reset_power_samples()
 
             if n_samples < self.min_burst:
-                print "\t\tTOO SHORT: talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path)
+                logging.info("TOO SHORT: talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path))
                 os.remove(path)
                 return
 
 
-            print "\t\tClosed out talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path)
+            logging.info("Closed out talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path))
 
             filename = path.split("/")[-1]
             newpath = "%s/%s" % (self.config["scanner"]["out_dir"], filename)
@@ -200,12 +195,12 @@ class recording_channelizer(gr.hier_block2):
             self._submit(msg)
 
         def started_cb(x):
-            #print "Start: %s" % str(x)
+            logging.debug("Channel opened on frequency %d" % x)
             # self._submit({"type": "start", "freq": x})
             pass
 
         def stop_cb(x):
-            #print " Stop: %s" % str(x)
+            logging.debug("Channel closed on frequency %d" % x)
             # self._submit({"type": "stop", "freq": x})
             self.radio_channels[x].note_close()
             pass
@@ -248,7 +243,7 @@ class recording_channelizer(gr.hier_block2):
 
             if freq in self.radio_channels:
                 if not self.radio_channels[freq].has_channel_cleared(tg) and self.radio_channels[freq].tg != 0:
-                    print "**** Reusing an unsquelched channel! f=%d, tg_old=%x, tg_new=%x" % (freq, self.radio_channels[freq].tg, tg)
+                    logging.warning("**** Reusing an unsquelched channel! f=%d, tg_old=%x, tg_new=%x" % (freq, self.radio_channels[freq].tg, tg))
                 self.radio_channels[freq].set_tg(tg)
 
             print_cb("group_call", [chan, tg])
@@ -265,7 +260,7 @@ class recording_channelizer(gr.hier_block2):
                                       "json",
                                       sub_json), callback=lambda s: "Isn't that nice.")
         except urllib2.URLError, e:
-            print "URL upload error! %s" % e
+            logging.error("URL upload error! %s" % e)
         except Exception, e:
             print e
             raise

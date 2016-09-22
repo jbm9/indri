@@ -28,6 +28,8 @@ sys.path.append(os.path.dirname(__file__) + "/../lib")
 
 import errno
 
+import logging
+
 from gnuradio import blocks
 from gnuradio import gr
 from gnuradio.eng_option import eng_option
@@ -64,7 +66,7 @@ class indri_osmocom(gr.top_block):
         osmosdr_h = osmosdr.source( args="numchan=" + str(1) + " " + "" )
 
         if not osmosdr_h.get_gain_range().values():
-            print "Looks like the RTL-SDR couldn't be opened, bailing"
+            logging.error("Looks like the RTL-SDR couldn't be opened, bailing")
             sys.exit(1)
 
         osmosdr_h.set_sample_rate(self.samp_rate)
@@ -91,13 +93,16 @@ class indri_osmocom(gr.top_block):
         
 
 if __name__ == '__main__':
+
+    logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%s', level=logging.INFO)
+
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
     parser.add_option("-c", "--config", help="File containing config file")
 
     (options, args) = parser.parse_args()
 
     if not options.config:
-        print "Need a config file, -c indri.json"
+        logging.error("Need a config file, -c indri.json")
         sys.exit(1)
 
 
