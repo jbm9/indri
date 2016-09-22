@@ -159,7 +159,7 @@ class recording_channelizer(gr.hier_block2):
 
 
     def attach_radio_channel(self, f_i, i):
-
+        logging.debug("Attaching radio channel to %d" % f_i)
         channel = radio_channel(self.chan_rate, self.threshold, f_i)
         self.connect((self.pfb_channelizer_ccf_0, i),
                      channel)
@@ -167,7 +167,7 @@ class recording_channelizer(gr.hier_block2):
         return channel
 
     def attach_voice_finals(self, f_i, i, audio_source):
-
+        logging.debug("Attaching voice/audio sink to %d" % f_i)
         wav_header = wave_header(1, 8000, 8, 0)
 
         def wave_fixup_cb(fd, n_samples, path):
@@ -227,6 +227,7 @@ class recording_channelizer(gr.hier_block2):
 
 
     def attach_control_finals(self, f_i, audio_source):
+        logging.debug("Attaching smartnet control sink to %d" % f_i)
         def print_cb(cbname, args):
             if not self.control_log:
                 return
