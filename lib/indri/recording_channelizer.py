@@ -13,6 +13,7 @@ from indri.channels import radio_channel, voice_channel
 from indri.smartnet.control_sink import control_sink
 
 from indri.server_api import ServerAPI
+from indri.control_log import ControlLog
 from indri.misc.janky_cpumeter import CPUMeter
 from indri.misc.wavheader import wave_header, wave_fixup_length
 from indri.smartnet.util import decode_frequency_rebanded
@@ -76,11 +77,7 @@ class recording_channelizer(gr.hier_block2):
 
         self.control_log_tmp_dir = config["scanner"]["control_log_tmp_dir"]
         self.control_log_dir = config["scanner"]["control_log_dir"]
-
-        self.control_log = None
-        self.control_log_filename = None
-
-        self.roll_control_log()
+        self.control_log = ControlLog(self.control_log_tmp_dir, self.control_log_dir)
 
         def channelizer_frequency(i):
             if i > self.n_channels/2:
@@ -229,16 +226,8 @@ class recording_channelizer(gr.hier_block2):
     def attach_control_finals(self, f_i, audio_source):
         logging.debug("Attaching smartnet control sink to %d" % f_i)
         def print_cb(cbname, args):
-            if not self.control_log:
-                return
-            # print "%s: %s" % (cbname, str(args))
             logline = "%s %s\n" % (cbname, " ".join(map(str, args)))
-            try:
-                self.control_log.write(logline)
-            except Exception, e:
-                # This sometimes races with the log cycling
-                pass
-
+            self.control_log.write(logline)
 
         def group_call_cb(chan, tg):
             freq = decode_frequency_rebanded(chan)
@@ -271,27 +260,7 @@ class recording_channelizer(gr.hier_block2):
             c.poll_end()
 
     def roll_control_log(self):
-        if self.control_log:
-            while True:
-                try:
-                    self.control_log.close()
-                    break
-                except IOError:
-                    time.sleep(0.01) # TODO mutexes
-
-            cur_path = os.path.join(self.control_log_tmp_dir, 
-                                    self.control_log_filename)
-
-            new_path = os.path.join(self.control_log_dir, 
-                                    self.control_log_filename)
-
-            os.rename(cur_path, new_path)
-
-        self.control_log_filename = "control_log_%d.log" % time.time()
-        cl_path = os.path.join(self.control_log_tmp_dir,
-                               self.control_log_filename)
-
-        self.control_log = file(cl_path, "a")
+        self.control_log.roll()
 
 
     def sample_offset(self):
