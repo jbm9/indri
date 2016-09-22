@@ -308,10 +308,9 @@ class recording_channelizer(gr.hier_block2):
         for f_i in self.control_sinks:
             if self.radio_channels[f_i].unmuted():
                 errterm = self.control_sinks[f_i].read_offset()
-                print "%d: %f: %f" % (f_i, errterm, self.freq_offset)
                 self.freq_offset += errterm*12500/8
                 self.tune_offset_cb(self.freq_offset)
-                # self.osmosdr_source_0.set_center_freq(self.Fc+self.freq_offset, 0)
+
 
     def get_levels(self):
         retval = {} # f => dB
@@ -319,9 +318,11 @@ class recording_channelizer(gr.hier_block2):
             retval[f_i] = self.radio_channels[f_i].get_db()
         return retval
 
+
     def splat_levels(self):
         body = { "type": "levels", "levels": self.get_levels(), "squelch": self.threshold }
         self._submit(body)
+
 
     def send_channel_states(self):
         states = {}
@@ -366,6 +367,7 @@ class recording_channelizer(gr.hier_block2):
         content["idle"] = self.cpu_meter.get_idle_percs()
 
         self.perflog.write(json.dumps(content) + "\n")
+
 
     def distribute_processor_affinity(self, NCORES):
         def procaff(b, i):
