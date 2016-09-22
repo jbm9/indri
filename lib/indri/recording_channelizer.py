@@ -12,6 +12,7 @@ from optparse import OptionParser
 from indri.channels import radio_channel, voice_channel
 from indri.smartnet.control_sink import control_sink
 
+from indri.server_api import ServerAPI
 from indri.misc.janky_cpumeter import CPUMeter
 from indri.misc.wavheader import wave_header, wave_fixup_length
 from indri.smartnet.util import decode_frequency_rebanded
@@ -30,6 +31,8 @@ class recording_channelizer(gr.hier_block2):
                                 gr.io_signature(0,0,0))
         self.config = config
         self.tune_offset_cb = tune_offset_cb
+
+        self.server_api = ServerAPI(config)
 
         self.samp_rate = config["scanner"]["Fs"]
         self.Fc = config["scanner"]["Fc"]
@@ -254,10 +257,8 @@ class recording_channelizer(gr.hier_block2):
         self.connect(audio_source, self.control_sinks[f_i])
 
     def _submit(self, event_body):
-        sub_json = json.dumps(event_body)
-        unirest.get("%s/%s/%s" % (self.base_url,
-                                  "json",
-                                  sub_json), callback=lambda s: "Isn't that nice.")
+        self.server_api.submit(event_body['type'], event_body)
+
 
     def update_powers(self):
         for c in self.radio_channels.values():
