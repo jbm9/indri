@@ -207,6 +207,7 @@ class recording_channelizer(gr.hier_block2):
         def stop_cb(x):
             #print " Stop: %s" % str(x)
             # self._submit({"type": "stop", "freq": x})
+            self.radio_channels[x].note_close()
             pass
 
         channel = voice_channel(
@@ -246,7 +247,9 @@ class recording_channelizer(gr.hier_block2):
             # self._submit({"type": "tune", "freq": freq, "tg": tg})
 
             if freq in self.radio_channels:
-                self.radio_channels[freq].tg = tg
+                if not self.radio_channels[freq].has_channel_cleared(tg) and self.radio_channels[freq].tg != 0:
+                    print "**** Reusing an unsquelched channel! f=%d, tg_old=%x, tg_new=%x" % (freq, self.radio_channels[freq].tg, tg)
+                self.radio_channels[freq].set_tg(tg)
 
             print_cb("group_call", [chan, tg])
 

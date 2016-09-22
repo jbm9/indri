@@ -39,6 +39,7 @@ class radio_channel(gr.hier_block2):
         self.null_sink = blocks.null_sink(gr.sizeof_float)
 
         self.tg = 0
+        self.closed_once = False # have we de-squelched since tg assigned?
 
         self.power_samples = 0
         self.power_total = 0.0
@@ -80,6 +81,16 @@ class radio_channel(gr.hier_block2):
         self.threshold = newthreshold
         self.pwr_squelch.set_db(newthreshold)
         self.power_probe.set_threshold_db(newthreshold)
+
+    def note_close(self):
+        self.closed_once = True
+
+    def set_tg(self, tg):
+        self.tg = tg
+        self.closed_once = False
+
+    def has_channel_cleared(self, new_tg):
+        return (self.tg == new_tg) or self.closed_once
 
 
 class voice_channel(gr.hier_block2):
