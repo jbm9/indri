@@ -255,16 +255,9 @@ class recording_channelizer(gr.hier_block2):
 
     def _submit(self, event_body):
         sub_json = json.dumps(event_body)
-        try:
-            unirest.get("%s/%s/%s" % (self.base_url,
-                                      "json",
-                                      sub_json), callback=lambda s: "Isn't that nice.")
-        except urllib2.URLError, e:
-            logging.error("URL upload error! %s" % e)
-        except Exception, e:
-            print e
-            raise
-
+        unirest.get("%s/%s/%s" % (self.base_url,
+                                  "json",
+                                  sub_json), callback=lambda s: "Isn't that nice.")
 
     def update_powers(self):
         for c in self.radio_channels.values():
