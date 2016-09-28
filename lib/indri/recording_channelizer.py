@@ -18,8 +18,6 @@ from indri.misc.janky_cpumeter import CPUMeter
 from indri.misc.wavheader import wave_header, wave_fixup_length
 from indri.smartnet.util import decode_frequency_rebanded
 
-import urllib2
-import unirest
 import json
 
 import time
@@ -78,6 +76,13 @@ class recording_channelizer(gr.hier_block2):
         self.control_log_tmp_dir = config["scanner"]["control_log_tmp_dir"]
         self.control_log_dir = config["scanner"]["control_log_dir"]
         self.control_log = ControlLog(self.control_log_tmp_dir, self.control_log_dir)
+
+        self.traffic_log = None
+        if "traffic_log_tmp_dir" in config["scanner"]:
+            self.traffic_log_tmp_dir = config["scanner"]["traffic_log_tmp_dir"]
+            self.traffic_log_dir = config["scanner"]["traffic_log_dir"]
+            self.traffic_log = ControlLog(self.traffic_log_tmp_dir, self.traffic_log_dir)
+
 
         def channelizer_frequency(i):
             if i > self.n_channels/2:
@@ -175,11 +180,18 @@ class recording_channelizer(gr.hier_block2):
                 tg = self.radio_channels[f_i].tg
                 avg_power = self.radio_channels[f_i].reset_power_samples()
 
+            if self.traffic_log:
+                self.traffic_log.write("%d %d %d %0.2f %s" %
+                                       (time.time(),
+                                       n_samples,
+                                       tg,
+                                       avg_power,
+                                       path) )
+
             if n_samples < self.min_burst:
                 logging.info("TOO SHORT: talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path))
                 os.remove(path)
                 return
-
 
             logging.info("Closed out talkgroup message, N=%d, pwr=%0.2f, tg=%04x (%d) / %s" % (n_samples, avg_power, tg, tg, path))
 
@@ -261,6 +273,8 @@ class recording_channelizer(gr.hier_block2):
 
     def roll_control_log(self):
         self.control_log.roll()
+        if self.traffic_log:
+            self.traffic_log.roll()
 
 
     def sample_offset(self):
