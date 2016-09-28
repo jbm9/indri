@@ -108,7 +108,9 @@ if __name__ == '__main__':
 
     config = IndriConfig(options.config)
 
-    for dir_key in ["tmp_dir", "out_dir", "control_log_tmp_dir", "control_log_dir"]:
+    for dir_key in ["tmp_dir", "out_dir",
+                    "control_log_tmp_dir", "control_log_dir",
+                    "traffic_log_tmp_dir", "traffic_log_dir", ]:
         try:
             if dir_key in config["scanner"]:
                 os.makedirs(config["scanner"][dir_key])
