@@ -3,6 +3,8 @@ function ScannerConfig() {
     var callbacks = []; // list of things to call back when config updates
     var got_config = false;
 
+    this.config = function() { return config; };
+
     this.updateConfig = function(response) {
 	console.log("Got a config update");
 	config = response.config;

@@ -1,12 +1,12 @@
 function ScannerPlayer() {
-    var tg_follow = [ 0x3270, 0x3290 ];
-
     var backlog = []; // enqueued-but-unavailable files
     var queue = []; // actual playlist
 
     var talkgroups = null;
 
     var playing = false;
+    var paused = false;
+
     var playing_entry;
     var curplaying = null; // URL of current wav
 
@@ -20,30 +20,11 @@ function ScannerPlayer() {
     var context = new sysac();
     var source = context.createBufferSource();
 
-    // kludge to allow this to work in ios
-    function ios_unlock_sound(event) {
-	var buffer = context.createBuffer(1, 1, 22050);    
-	source = context.createBufferSource();
-	source.buffer = buffer;    
-	source.connect(context.destination);    
-	source.noteOn(0);    
-	window.removeEventListener("touchend", ios_unlock_sound, false);
-    }
-
-    window.addEventListener("touchend", ios_unlock_sound, false);
-
-
-    var uidiv = null; // <div> for our UI
-
     var base_url = "http://localhost/"; // base of all WAV urls
-
-    var paused = false;
 
     this.configUpdate = function(config) {
 	base_url = config["wav_base_uri"];
     }
-
-    this.setBaseURL = function(u) { base_url = u; }
 
 
     this.registerTalkgroups = function(tgs) { 
@@ -97,8 +78,6 @@ function ScannerPlayer() {
 	var url = base_url + entry.filename;
 	curplaying = { "tg": entry.tg, "filename": entry.filename };
 
-	set_current_tg("(loading) " + entry.tg, entry.avg_power);
-
 	if (printQueueDebug) console.debug("play: " + url);
 	playing = true;
 	playing_entry = entry;
@@ -127,7 +106,23 @@ function ScannerPlayer() {
 
 		source.connect(context.destination);
 		source.start(0);
-		set_current_tg(entry.tg, entry.avg_power);
+		updateUI();
+
+                if (talkgroups && parseInt(playing_entry.tg)) {
+                    var s = "";
+                    var tg = talkgroups.lookup(playing_entry.tg);
+
+                    if (tg) {
+                        var pwr = playing_entry.avg_power;
+                        var decode = "[" + (parseInt(pwr*10)/10.0) + "] TG-" + playing_entry.tg;
+
+		        decode += "--" + tg.category() + "/" + tg.short() + 
+		            "(" + tg.long() + ")";
+
+                        notifyActiveWavTG(decode);
+                    }
+                }
+
             },
 				    function(e) { console.error("Audio decode error: " + e); play_next(); }
 				   );
@@ -139,37 +134,38 @@ function ScannerPlayer() {
     var play_next = function() {
 	curplaying = null;
 	try {
-	    if (playing) source.stop();
+            if (playing) source.stop();
 	} catch(e) {
 	}
 
 	if (play_anything && 0 == queue.length && 0 != backlog.length) {
-	    var filename = null
-	    var entry;
+            var filename = null
+            var entry;
 
-	    for (var i = backlog.length-1; i >= 0; i--) { // LIFO
+            for (var i = backlog.length-1; i >= 0; i--) { // LIFO
 		entry = backlog[i];
 		if (entry.available) {
 		    filename = entry.path;
 		    break;
 		}
 		entry = null; // sentinel value
-	    }
+            }
 
-	    if (filename) {
+            if (filename) {
 		var newbacklog = backlog.filter(function(e,i,a) { return e.filename != filename; });
 		backlog = newbacklog;
 
 		if (null == entry.tg) entry.tg = 0
 		queue.push(entry);
-	    }
+                updateUI();
+            }
 	}
 
 	if (queue.length) {
-	    play(queue.shift());
+            play(queue.shift());
 	} else {
-	    playing = false;
-	    set_current_tg(null);
+            playing = false;
+            updateUI();
 	}
     }
 
@@ -185,6 +181,7 @@ function ScannerPlayer() {
 	if (avails.length && !playing) play_next();
 
 	if (play_anything && !playing) play_next();
+        updateUI();
     }
 
     var available = function(filename) {
@@ -192,15 +189,15 @@ function ScannerPlayer() {
 	var got_hit = false;
 
 	for (var i = 0; i < backlog.length; i++) {
-	    if (filename == backlog[i].filename) {
+            if (filename == backlog[i].filename) {
 		backlog[i].available = true;
 		got_hit = true;
 		if (printQueueDebug) console.debug("Got hit: " + filename);
-	    }
+            }
 	}
 	if (!got_hit) {
-	    if (printQueueDebug) console.debug("available (" + backlog.length + "): " + filename);
-	    backlog.push({"filename": filename, 
+            if (printQueueDebug) console.debug("available (" + backlog.length + "): " + filename);
+            backlog.push({"filename": filename, 
 			  "tg": null, 
 			  "available": true, 
 			  "added": new Date(), 
@@ -208,7 +205,7 @@ function ScannerPlayer() {
 			  "avg_power": -101.0});
 	}
 
-	//	  window.setTimeout(flushbacklog, 1000);
+	//      window.setTimeout(flushbacklog, 1000);
 	flushbacklog();
     }
     this.available = available;
@@ -218,11 +215,12 @@ function ScannerPlayer() {
 	var tg = response.tg
 	var avg_power = response.avg_power;
 	var filename = response.path;
+	var available = (response.available ? true : false);
 
 	var interesting = talkgroups.following(tg);
 
 	if (playing && filename == playing_entry.filename) {
-	    set_current_tg(tg, avg_power);
+            updateUI();
 	}
 
 
@@ -231,25 +229,25 @@ function ScannerPlayer() {
 
 	for (var i = 0; i < backlog.length; i++) {
 
-	    if (filename == backlog[i].filename) {
+            if (filename == backlog[i].filename) {
 		backlog[i].tg = tg;
 		backlog[i].available = true;
 		backlog[i].avg_power = avg_power;
 		got_hit = true;
 		if (printQueueDebug) console.debug("qualified filename: " + filename);
-	    }
+            }
 	}
 	if (!got_hit) {
-	    if (printQueueDebug) console.debug("Unqualified filename: " + filename + " tg: " + tg);
-	    backlog.push({"filename": filename, 
+            if (printQueueDebug) console.debug("Unqualified filename: " + filename + " tg: " + tg);
+            backlog.push({"filename": filename, 
 			  "tg": tg, 
-			  "available": false, 
+			  "available": available, 
 			  "added": new Date(), 
 			  "interesting": interesting,
 			  "avg_power": avg_power});
 	}
 
-	//	  window.setTimeout(flushbacklog, 1000);
+	//      window.setTimeout(flushbacklog, 1000);
 	flushbacklog();
     }
 
@@ -257,82 +255,75 @@ function ScannerPlayer() {
 	available(response.path);
     }
 
-    var set_current_tg = function(s, pwr) {
-	var curtg = uidiv.find(".current_tg");
-	if (null == s) {
-	    curtg.text("-idle-");
-	    curtg.css("background-color", "#ccc")
-	} else {
-	    var tgId = parseInt(s);
-	    var decode = "TG-" + tgId.toString(16);
-	    if (talkgroups) {
-		var tg = talkgroups.lookup(tgId);
-		if (pwr) 
-		    decode = "[" + (parseInt(pwr*10)/10.0) + "] " + decode
-		if (tg)
-		    decode += "--" + tg.category + "/" + tg.short + 
-		              "(" + tg.long + ")";
-	    }
 
-	    curtg.text(decode);
-	    if (tgId)
-		notifyActiveWavTG(decode);
-	    curtg.css("background-color", "#ecc")
+    var template_data = function() {
+	var data = {};
+	
+	data["playing_power"] = ""; 
+	data["playing_desc"] = " -idle -";
+	data["playing_freq"] = "";
+	data["playing_state"] = "play_idle";
+	data["playing_enqueued"] = 0;
+
+	if (playing) {
+            data["playing_power"] = parseInt(playing_entry.avg_power);
+            data["playing_desc"] = talkgroups.lookup(playing_entry.tg).short();
+            data["playing_freq"] = "[freq]";
+            data["playing_state"] = "play_playing";
+            data["playing_enqueued"] = queue.length;
 	}
-    }
 
+	return data;
+    };
 
-
-    var setup_ui = function() {
-	if (!uidiv) return;
-
-	var tgdisplay = document.createElement("div");
-	var newlabel = document.createElement("span");
-	newlabel.textContent = "Now playing:";
-	tgdisplay.appendChild(newlabel);
-
-	var curtg = document.createElement("span");
-	curtg.classList.add("current_tg");
-	tgdisplay.appendChild(curtg);
-
-	uidiv.append(tgdisplay);
-
-
-	set_current_tg(null);
-    }
-
-
-    this.initUI = function(uidiv_in) {
-	uidiv = uidiv_in;
+    var updateUI = function() {
+	$("#controls").loadTemplate("#tmpl-controls", template_data());
+	
+	var uidiv = $("#controls");
 
 	var pause_button = uidiv.find("#playpause");
 	pause_button.click(function() {
-	    pause_unpause(function(paused) {
+            pause_unpause(function(paused) {
 		pause_button.text(paused ? "|>" : "||");
-	    });
+            });
 	});
 
 
 	var replay_button = uidiv.find("#playreplay");
 	replay_button.click(function() {
-	    if (curplaying) {
+            if (curplaying) {
 		source.onended = function() {};
 		play(curplaying);
-	    }
+            }
 	});
 
 	var next_button = uidiv.find("#playnext");
 	next_button.click(function() {
-	    play_next();
+            play_next();
 	});
 
 
 	var any_button = uidiv.find("#playany");
 	any_button.click(function() {
-	    play_anything = !play_anything;
-	    any_button.text(play_anything ? "*" : "_");
+            play_anything = !play_anything;
+            any_button.text(play_anything ? "*" : "[]");
 	});
-    }
+    };
+    this.updateUI = updateUI;
 
+
+
+    // kludge to allow this to work in ios
+    function ios_unlock_sound(event) {
+	var buffer = context.createBuffer(1, 1, 22050);    
+	source = context.createBufferSource();
+	source.buffer = buffer;    
+	source.connect(context.destination);    
+	source.noteOn(0);    
+	window.removeEventListener("touchend", ios_unlock_sound, false);
+    }
+    window.addEventListener("touchend", ios_unlock_sound, false);
+
+    
     return this;
 };

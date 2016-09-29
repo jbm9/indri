@@ -1,160 +1,217 @@
+function ScannerTalkgroup(d, cb) {
+    var tgid = d.tg;
+    var category = d.category;
+    this.category = function() { return category; };
+    var short = d.short;
+    this.short = function() { return short; };
+    var long = d.long;
+    this.long = function() { return long; };
+
+    var channel_board = cb;
+
+    this.tg = tgid;
+
+    var div_id = "talkgroup_" + parseInt(tgid).toString(16);
+
+    //////////////////////
+    // Are we following this TG?
+    var followed = false;
+    this.following = function() { return followed; }
+
+    var toggleFollow = function() {
+	followed = (!followed);
+	updateUI();
+    };
+    this.toggleFollow = toggleFollow;
+
+    var setFollow = function(b) { followed = b; }
+    this.setFollow = setFollow;
+
+    //////////////////////
+    // A list of channels this TG is transmitting on
+    var transmitting = []; // list of channels on which we're transmitting
+    this.channelOpen = function(freq) {
+	if (-1 != transmitting.indexOf(freq)) return;
+	transmitting.push(freq);
+    }
+
+    this.channelClose = function(freq) {
+	if (-1 == transmitting.indexOf(freq)) return;
+	transmitting.slice(transmitting.indexOf(freq),1);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // A list of recent WAVs for this TG
+    var wavs = []; // list of ScannerPlayer events, e.tg == tg, e.path = wav, etc.
+
+
+    //////////////////////////////////////////////////////////////////////
+    // Is this currently filtered out of the display?
+    var filtered = false;
+    var filtered_xmit = false;
+    var filtered_followed = false;
+
+    var setFiltered = function(v, xmit_only, follow_only) { 
+	filtered = v;
+
+	filtered_xmit = xmit_only;
+	filtered_followed = follow_only;
+
+	updateUI();
+    }
+    this.setFiltered = setFiltered;
+
+    var get_desc = function() {
+	return tgid.toString(16) + " " + category + " " + short + " " + long;
+    }
+
+    this.applyFilter = function(filter_str, xmit_only, follow_only) {
+	var curdesc_lc = get_desc().toLowerCase();
+	var filter_lc = filter_str.toLowerCase();
+
+	var is_filtered = (-1 == curdesc_lc.indexOf(filter_lc));
+	setFiltered(is_filtered, xmit_only, follow_only);
+	return checkFiltered();
+    };
+
+    var checkFiltered = function() {
+	if (filtered) return true;
+	if (filtered_xmit && !(cb.tgXmitting(tgid))) return true;
+	if (filtered_followed && !followed) return true;
+
+	return false;
+    };
+
+    //////////////////////
+    // Actual data render
+    var template_data = function() {
+	var data = {};
+
+	data["talkgroup_div_id"] = div_id;
+	data["talkgroup_xmit_class"] = cb.tgXmitting(tgid) ? "channel_xmit" : "channel_idle";
+	data["tg_idno"] = tgid.toString(16);
+	data["following"] = (followed ? "tg_followed" : "tg_nofollow");
+	data["level"] = "";
+	data["tg_category"] = category;
+	data["short"] = short;
+	data["long"] = long;
+	data["filtered"] = checkFiltered() ? "tg_filtered" : "tg_unfiltered";
+
+	data["cum_class"] = data["filtered"] + " " + data["talkgroup_xmit_class"] + " " + data["following"];
+
+	return data;
+    };
+    this.template_data = template_data;
+
+    var updateUI = function() {
+	$("#" + div_id).loadTemplate("#tmpl_tg_status", template_data());
+    };
+    this.updateUI = updateUI;
+
+    this.addClick = function() {
+	$("#" + div_id).click(function() { toggleFollow(); });
+    };
+    
+    return this;
+}
+
+
 function ScannerTalkgroups() {
     var tgs = [];
     var tgIndex = {}; // tg => entry
 
-    var tg_follows = []; // list of tgIDs we're following
-
-    var tgdiv = null; // <div> for the talkgroup selector
-    var listdiv = null; // <div> for the tg list itself
-
     var tg_filter_string = ""; // filter tg list on this
+    
 
+    //////////////////////
+    // Help out the channel display
     var channel_board = null;
-
-    var settings = null; // reference to ScannerSettings
-
     this.registerChannelBoard = function(chanb) { channel_board = chanb; };
 
-    var following = function(tg) {
-	return -1 != tg_follows.indexOf(tg);
+    var baseTG = function(tg) { return parseInt(tg) - parseInt(tg) % 16; }
+
+    var following = function(tgid) {
+	try {
+	    return tgIndex[baseTG(tgid)].following();
+	} catch(e) {
+	    return false;
+	}
     };
     this.following = following;
 
-    this.follows = function() { return tg_follows; };
 
+    //////////////////////
+    // Settings, to save between sessions
+    var settings = null;
     var updateSettings = function() {
+	var tg_follows = [];
+	for (var t in tgs) {
+	    if (t.following())
+		tg_follows.push(t.tg);
+	}
 	settings.set("talkgroups.follow", tg_follows);
     }
 
-    var follow_talkgroup = function(tg, skip_update) {
-	if (-1 != tg_follows.indexOf(tg)) return;
-	tg_follows.push(tg);
-	if (!skip_update) updateUI();
-	updateSettings();
-    };
-    this.followTalkgroup = follow_talkgroup;
-
-    var unfollow_talkgroup = function(tg, skip_update) {
-	var i = tg_follows.indexOf(tg);
-	if (-1 == tg_follows) return;
-	tg_follows.splice(i,1);
-	if (!skip_update) updateUI();
-	updateSettings();
-    };
-    this.unfollowTalkgroup = unfollow_talkgroup;
-
-    var toggle_talkgroup = function(tg) {
-	if (following(tg)) unfollow_talkgroup(tg);
-	else follow_talkgroup(tg);
-    }
-
-
-    var initUI = function() {
-	listdiv.empty();
-	listdiv.append($("<div id='tg_stand_in_div' class='tg_filtered'>"));
-    	tgs.forEach(function(e,i,a) {
-	    var desc = e.tg.toString(16) + " : " + e.category + "/" + e.short + ": " + e.long;
- 	    var curdiv = $("<div id='tg_box_" + e.tg + "'>");
-	    curdiv.text(desc);
-
-	    curdiv.click(function() { toggle_talkgroup(e.tg); });
-
-	    listdiv.append(curdiv);
-	});
-    }
-	
-	 
-    var updateUI = function() {
-	var n_filtered = 0;
-	var filtered_xmit = false;
-	var filtered_follow = false;
-
-	tgs.forEach(function(e,i,a) {
- 	    var curdiv = $("#tg_box_" + e.tg);
-	    if (!curdiv) {
-		console.log("Missing div for tg=" + e.tg);
-		return;
-	    }
-
-	    var is_xmitting = channel_board.tgXmitting(e.tg);
-
-	    var desc = e.tg.toString(16) + " : " + e.category + "/" + e.short + ": " + e.long;
-	    var is_filtered = (-1 == desc.indexOf(tg_filter_string));
-
-	    if (is_filtered) n_filtered += 1;
-
-	    curdiv.toggleClass("tg_filtered", is_filtered);
-
-	    if (following(e.tg)) {
-		curdiv.addClass("tg_followed");
-		if (is_filtered) filtered_follow = true;
-	    } else {
-		curdiv.removeClass("tg_followed");
-	    }
-
-	    if (channel_board.tgXmitting(e.tg)) {
-		curdiv.addClass("tg_transmitting");
-		if (is_filtered) filtered_xmit = true;
-	    } else {
-		curdiv.removeClass("tg_transmitting");
-	    }
-	});
-
-	var stand_in_div = $("#tg_stand_in_div");
-	stand_in_div.text(" - Filtered " + n_filtered + " TGs with '" + tg_filter_string + "'")
-	if (filtered_xmit) stand_in_div.addClass("tg_transmitting");
-	if (filtered_follow) stand_in_div.addClass("tg_follwed");
-
-	stand_in_div.toggleClass("tg_filtered", n_filtered == 0);
-
-    }
-    this.updateUI = updateUI;
-
-    this.attachSettings = function(scanner_settings) {
+    var attachSettings = function(scanner_settings) {
 	settings = scanner_settings;
 	var settings_followed =  settings.get("talkgroups.follow");
 
-	if (settings_followed) tg_follows = settings_followed;
+	if (settings_followed) {
+	    var tg_follows = settings_followed;
+	    for (t in tg_follows) {
+		if (tgIndex[t]) tgIndex[t].setFollow(true);
+	    }
+	}
     };
+    this.attachSettings = attachSettings;
 
-    this.attachTGDiv = function(tgdiv_in) {
-	tgdiv = $(tgdiv_in);
 
-	var filterdiv = $("<div>");
-	var filter_box = $("<input>");
-	filterdiv.append(filter_box);
-	tgdiv.append(filterdiv);
+    //////////////////////
+    // Update the UI
+    var applyFilter = function() {
+	var filter_str = $("#tg_filter_input").val();
+	var filter_xmit_only = $("#tg_filter_cb_xmit").is(":checked");
+	var filter_follow_only = $("#tg_filter_cb_follow").is(":checked");
 
-	filter_box.change(function() {
-	    tg_filter_string = this.value;
-	    updateUI();
+	var n_filtered = 0;
+
+	tgs.forEach(function(t) {
+	    if (t.applyFilter(filter_str, filter_xmit_only, filter_follow_only)) {
+		n_filtered++;
+	    }
 	});
+	console.log("Filtered " + n_filtered + " entries");
+    }
+    this.applyFilter = applyFilter;
 
-	listdiv = $("<div>")
-	tgdiv.append(listdiv);
+    this.updateUI = function(){ tgs.forEach(function(t) { t.updateUI(); }) }
 
-	initUI();
+    $("#tg_filter_input").change(function() { applyFilter(); });
+    $("#tg_filter_input").keyup(function() { applyFilter(); });
 
-	updateUI();
-    };
+    $("#tg_filter_cb_xmit").change(function() { applyFilter(); });
+    $("#tg_filter_cb_follow").change(function() { applyFilter(); });
+
 
 
     this.configUpdate = function(config) {
-	tgs = config["talkgroups"];
+	var dicts = config["talkgroups"];
+	tgs = dicts.map(function(e) { return new ScannerTalkgroup(e, channel_board); });
 
 	tgs.sort(function(a,b) { return (a.tg < b.tg ? -1 : 1); });
 
 	tgIndex = {}
 	tgs.forEach(function(t) { tgIndex[t.tg] = t; });
 
-	channelStates = {};
-	
-	initUI();
-	updateUI();
+	var datas = tgs.map(function(e) { return e.template_data(); });
+	$("#talkgrouplist").loadTemplate($("#tmpl_tg_status"), datas);
+	tgs.forEach(function(e) { e.addClick(); })
     }
 
     this.lookup = function(tg) {
-	return tgIndex[tg];
+	var base_tg = parseInt(tg);
+	base_tg -= base_tg % 16;
+	return tgIndex[base_tg];
     }
 
 

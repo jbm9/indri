@@ -1,69 +1,123 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-  <title>WebSockets Demo</title>
-  <meta name="description" content="">
-  <meta name="viewport" content="width=device-width">
-  <link rel="stylesheet" href="./vendor/normalize.css">
-  <link rel="stylesheet" href="./vendor/foundation.min.css">
-  <link rel="stylesheet" href="./client.css">
-</head>
-<body>
-  <nav class="top-bar">
-    <ul class="title-area">
-      <li class="name">
-      <h1><a href="#">WebSockets Demo </a></h1>
-      </li>
-      <li class="toggle-topbar menu-icon"><a href="#"><span>Menu</span></a></li>
-    </ul>
+    <head>
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+	<title>Channel Status</title>
+	<meta name="description" content=""/>
+	<meta name="viewport" content="width=device-width"/>
+	<link rel="stylesheet" href="./vendor/normalize.css" />
+	<link rel="stylesheet" href="./vendor/foundation.min.css" />
+	<link rel="stylesheet" href="./client.css" />
+    </head>
+    <body>
 
-    <section class="top-bar-section">
-      <ul class="left">
-        <li class="divider"></li>
-        <li class="name"><a><span id="client-count">0</span> clients connected</a></li>
-        <li class="divider hide-for-small"></li>
-        <li class="has-dropdown">
-          <a href="#">Installed modules</a>
-          <ul id="installed-modules" class="dropdown">
-          </ul>
-        </li>
-        <li class="divider hide-for-small"></li>
-      </ul>
-      <ul class="right">
-        <li class="divider"></li>
-        <li><a href="http://os.alfajango.com/websockets-demo">Documentation</a></li>
-        <li><a href="https://github.com/JangoSteve/websockets-demo">Github</a></li>
-        <li><a href="http://www.meetup.com/SEM-JS/">SEM.js</a></li>
-        <li><a href="https://twitter.com/jangosteve">@jangosteve</a></li>
-      </ul>
-    </section>
-  </nav>
 
-  <!--[if lt IE 7]>
-    <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
-  <![endif]-->
+	<!-- ---------- Audio player controls template ---------- -->
+	<script type="text/html" id="tmpl-controls">
+	    <div class="controls-container" data-class="playing_state">
+                Playing: 
+		[<span class="current-power" data-content="playing_power"></span>]
+		<span class="current-desc" data-content="playing_desc"></span>
+		<span class="current-queue" data-content="playing_enqueued"></span><br/>
+		<button id="playpause">||</button>
+		<button id="playreplay">&lt;-</button>
+		<button id="playnext">-></button>
+		<button id="playany">[]</button>
+	    </div>
+	</script>
 
-  <div class="panel">
-    <div id="event-console">
-      <div class="event-msg welcome-msg">
-        Welcome to the WebSockets demo.
-        This is your event console.
-        Check out the <a href="https://github.com/JangoSteve/websockets-demo/blob/master/README.md">README</a> for more info.
-      </div>
+	<!-- -------- Connection template ------------ -->
+	<script type="text/html" id="tmpl-connection-status">
+	    <div class="connection-status">Conn status:
+		<span class="websocket-connected" data-content="websocket_connected" data-class="websocket_connected_class"></span>
+		<span class="decode-stats" data-content="decode_stats" data-class="decode_stats_class"></span>
+		<span class="freq-offset" data-content-append="freq_offset">Offset: </span>
+	    </div>
+	</script>
+
+
+	<!-- ---------- Channel template ---------- -->
+	<script type="text/html" id="tmpl_channel_status">
+	    <div class="channel-status" data-id="channel_div_id" data-class="channel_xmit_class">
+
+		<span class="channel_tg_short" data-content="short" data-class="following"></span>
+		<span class="channel_level"       data-content="level" data-class="xmit_class" data-title="freq"></span>
+
+		<div class="channel_hover">
+		    <span class="channel_freq"            data-content="freq"></span>
+		    <span class="channel_level"       data-content="level" data-class="xmit_class" data-title="freq"></span><br/>
+		    <span class="channel_tg_idno"       data-content="tg_idno" data-class="following"></span>
+		    <span class="channel_tg_short"      data-content="short"></span><br/>
+		    <span class="channel_tg_category" data-content="tg_category"></span><br/>
+		    <span class="channel_tg_long"       data-content="long"></span>
+		</div>
+	    </div>
+	</script>
+
+
+	<!-- --------  Talkgroup template ------------ -->
+	<script type="text/html" id="tmpl_tg_status">
+	    <div class="talkgroup-status" data-id="talkgroup_div_id"
+		 data-class="cum_class">
+		<span class="talkgroup_tg_idno" data-content="tg_idno"
+		      data-class="following"></span>
+		<span class="talkgroup_tg_short" data-content="short"></span>
+		<span class="talkgroup_level" data-content="level" data-class="xmit_class"></span>
+		<span class="talkgroup_tg_category" data-content="tg_category"></span><br/>
+		<span class="talkgroup_tg_long" data-content="long"></span>
+	    </div>
+	</script>
+
+
+	<!-- -------------------------------------------------- -->
+	<div id="channelboard">
+	    <b>Channels</b>:<br/>
+	    <span class="channel_tg_short" title="TalkGroup the channel is
+						  allocated to"><center>TG</center></span>
+	    <span class="channel_level" title="Signal strength of the current
+					       signal, dB"><center>dB</center></span>
+	    
+	    <div id="channellist"></div>
+	</div>
+
+	<div id="controls"></div>
+	<div id="connstatus"></div>
+	<div id="talkgroupboard">
+
+            <div id="talkgroupfilters"><b>Talkgroups</b>
+            <span> Filter: <input id="tg_filter_input">
+            <label  class="inlinelabel"><input type="checkbox" id="tg_filter_cb_xmit">Transmitting</label>
+	    <label  class="inlinelabel"><input type="checkbox" id="tg_filter_cb_follow">Following</label>
+	</span>
     </div>
-  </div>
+	    <div id="talkgrouplist">
+	    </div>
+	</div>
 
-  <ul id="connected-clients" class="small-block-grid-2 large-block-grid-4">
-  </ul>
 
-  <script src="./vendor/jquery.min.js"></script>
-  <script src="./vendor/custom.modernizr.js"></script>
-  <script src="./vendor/foundation.min.js"></script>
-  <script>
-    $(document).foundation();
-  </script>
-  <script src="./client.js"></script>
-</body>
+
+
+	<script src="./vendor/jquery.min.js"></script>
+	<script src="./vendor/jquery.loadTemplate.js"></script>  
+	<script src="./vendor/custom.modernizr.js"></script>
+	<script src="./vendor/foundation.min.js"></script>
+	<script>
+	    $(document).foundation();
+	</script>
+
+	<script>
+	</script>
+
+	<script src="scanner_settings.js"></script>
+	<script src="scanner_connection.js"></script>
+	<script src="scanner_config.js"></script>
+	<script src="scanner_talkgroups.js"></script>
+	<script src="scanner_player.js"></script>
+	<script src="channels.js"></script>
+	<script src="scanner_app.js"></script>
+	<script>
+	    var scanner_app = new ScannerApp();
+	</script>
+    </body>
 </html>

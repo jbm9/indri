@@ -1,4 +1,6 @@
 function ScannerSettings() {
+    // A simple cookie-backed key-value store.
+
     var min_v = 1; // minimum version we can use
 
     var values = { "v": 1 }; // key=>value store

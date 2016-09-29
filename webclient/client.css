@@ -24,6 +24,7 @@ body {
 .tg_followed {
     background-color: #99c;
 }
+.tg_nofollow {}
 
 .tg_transmitting {
     background-color: #c99;
@@ -40,8 +41,137 @@ body {
 }
 
 .tg_filtered {
-    display: none;
+    visibility: hidden;
+    height: 0;
 }
 
 #nowplaying {
+}
+
+
+.connection-status {
+    font-size: 60%;
+};
+
+
+
+.decode_stats_ok { background-color: hsl(120, 90%, 92%); }
+.decode_stats_90 { background-color: hsl( 80, 90%, 92%); }
+.decode_stats_80 { background-color: hsl( 60, 90%, 92%); }
+.decode_stats_70 { background-color: hsl( 30, 90%, 92%); }
+.decode_stats_bad { background-color: hsl( 0, 90%, 92%); }
+
+
+
+
+.websocket_state_disconnected { background-color: hsl(0, 90%, 92%); }
+.websocket_state_timeout { background-color: hsl(30, 90%, 92%); }
+.websocket_state_connected { background-color: hsl(60, 90%, 92%); }
+.websocket_state_connecting { background-color: hsl(90, 90%, 92%); }
+.websocket_state_live { background-color: hsl(120, 90%, 92%); }
+
+
+
+
+
+
+#channelboard {
+    background-color: rgba(200,200,200,0.2);
+    text-align: center;
+    margin: 0.1ex;
+    border-radius: 4px;
+    width: 18ex;
+    display: inline-block;
+    float: left;
+}
+
+.tg_followed {
+    background-color: hsl(210, 35%, 75%);
+}
+
+.channel_xmit.tg_followed {
+    background-color: hsl(120, 80%, 70%);
+    font-weight: bold;
+}
+
+
+.tg_nofollow {}
+
+.tg_control {
+    background-color: hsl(60, 90%, 92% );
+}
+
+.channel_hover {
+    display: none;
+    position: absolute;
+    background: #c9c6c6;
+    width: 20ex;
+    color: black;
+}
+
+.channel_freq {
+    font-weight: bold;
+}
+.channel_level {
+    display: inline-block; 
+    width: 5ex; 
+    text-align: center; 
+}
+
+.channel_row_xmit {
+    color: black;
+}
+.channel_row_idle {
+    color: grey;
+}
+
+
+.channel_xmit { 
+    background-color: hsl(120, 50%, 80%); 
+    border-radius: 30px; 
+}
+.channel_idle { }
+
+.channel_tg_idno { 
+    width: 5ex; 
+    display: inline-block; 
+    text-align: right;
+}
+.channel_tg_category {}
+
+.channel_tg_short { 
+    width: 12ex; 
+    display: inline-block; 
+    text-align: right;
+}
+
+.channel_tg_long {}
+
+
+
+
+#talkgroupboard {
+    display: inline-block;
+    width: 50ex;
+}
+
+
+.talkgroup_tg_idno {
+    width: 6ex;
+    display: inline-block;
+    text-align: right;
+    font-family: Consolas, courier new, courier, monospace;
+}
+
+.talkgroup_tg_short {
+    width: 12ex;
+    display: inline-block;
+}
+
+.talkgroup_tg_long {
+    padding-left: 8ex;
+}
+
+.inlinelabel {
+    display: inline;
 }

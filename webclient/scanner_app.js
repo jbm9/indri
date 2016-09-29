@@ -4,9 +4,13 @@ function ScannerApp() {
     //////////////////////////////////////////
     // The actual websocket connection
     var scanner_connection = new ScannerConnection();
-    scanner_connection.attachUI($("#connstatus"));
 
-    function scanner_reconnect() {scanner_connection.connect(hostname); }
+    // Some goofy gymnastics to ensure we're always trying to reconnect
+    function scanner_reconnect() { 
+	if (scanner_connection.reconnect(hostname)) {
+	    window.setTimeout(scanner_reconnect, 4000);
+	}
+    }
 
     scanner_connection.register("_CLOSE_", 
 			       function() { 
@@ -31,7 +35,6 @@ function ScannerApp() {
     // Talkgroup decoder ring
     //
     var scanner_talkgroups = new ScannerTalkgroups();
-    scanner_talkgroups.attachTGDiv($("#talkgroupboard"));
     scanner_talkgroups.attachSettings(scanner_settings);
     scanner_config.register(scanner_talkgroups.configUpdate);
 
@@ -40,8 +43,8 @@ function ScannerApp() {
     // Audio player
     //
     var scanner_player = new ScannerPlayer();
+    scanner_player.updateUI();
 
-    scanner_player.initUI($("#nowplaying"));
     scanner_player.registerTalkgroups(scanner_talkgroups);
 
     scanner_config.register(scanner_player.configUpdate);
@@ -55,7 +58,6 @@ function ScannerApp() {
     // Channel status display
     //
     var channel_board = new ChannelBoard();
-    channel_board.attachUI($("#channelboard"));
     channel_board.registerTalkgroups(scanner_talkgroups);
 
     scanner_config.register(channel_board.configUpdate);
@@ -72,7 +74,7 @@ function ScannerApp() {
     //////////////////////////////////////////
     // All set up: time to go!
 
-    scanner_connection.connect(hostname);
+    scanner_reconnect(hostname);
 
     this.settings = scanner_settings;
     this.connection = scanner_connection;

@@ -5,17 +5,14 @@ function Channel(entry) {
     var level = -100;
     var xmitting = false;
 
+    var div_id = "channel_" + parseInt(entry.freq);
+
     var config = null;
     this.configUpdate = function(newconfig) { config = newconfig; }
     var tg = 0;
     this.setTG = function(v) { tg = v; updateUI();}
 
     this.getTG = function() { return tg; };
-
-    var uidiv = undefined;
-    this.getUIDiv = function() { return uidiv; }
-
-    var note = "";
 
     var talkgroups = null;
 
@@ -31,58 +28,65 @@ function Channel(entry) {
 	return talkgroups.lookup(tg);
     }
 
-    var updateUI = function() {
+
+    var template_data = function() {
+	var data = {};
 	var disptring = ""
 
-	if (is_control) {
-	    if (config)
-		xmitting = (level > config.scanner.threshold);
-	    dispstring = " -control- ";
-	} else if (tg && talkgroups) {
-	    var curTG = talkgroups.lookup(tg);
-	    if (curTG) {
-		dispstring = "TG-" + parseInt(tg).toString(16) + ": " +
-		    curTG.category + "/" + curTG.short + ": " +
-		    curTG.long;
-	    }
-	} else {
-	    dispstring = name;
-	}
-	
-	$(uidiv).text(frequency + 
-	    "(" + level + ")" + " / " +
-	    (xmitting ? "" : "-idle- (") + 
-		      dispstring +
-	    (xmitting ? "" : ")"));
+	data["freq"] = frequency;
+	data["xmitting"] = xmitting;
+	data["xmit_class"] = data["xmitting"] ? "channel_xmit" : "channel_idle";
+	data["channel_xmit_class"] = data["xmitting"] ? "channel_row_xmit" : "channel_row_idle";
 
-	set_xmit_style();
+	data["tg_idno"] = parseInt(tg).toString(16);
+	
+	var curTG = talkgroups.lookup(tg);
+	data["tg_category"] = curTG ? curTG.category() : "-";
+	data["short"] = curTG ? curTG.short() : "unk";
+	data["long"] = curTG ? curTG.long() : "[Unknown]";
+	data["level"] = parseInt(level);
+	if (data["level"] > 0) data["level"] = "+" + data["level"];
+
+	if (data["level"] < -99) data["level"] = ""; // don't show -100s
+
+	data["following"] = talkgroups.following(tg) ? "tg_followed" : "tg_nofollow";
+
+	data["channel_div_id"] = div_id;
+
+	if (is_control) { // TODO refactor control_counts to attach here
+	    data["is_control"] = true;
+	    data["tg_idno"] = "-";
+	    data["short"] = "control";
+	    data["long"] = " - control -";
+	    data["following"] = "tg_control";
+	}
+
+	return data;
+    }
+    this.template_data = template_data;
+
+    var updateUI = function() {
+	var data = template_data();
+	$("#" + div_id).loadTemplate($("#tmpl_channel_status"), data);
+
+	var display_hover = function() {
+	    $(this).find(".channel_hover").fadeIn(100);
+	};
+
+	var hide_hover = function() {
+	    $(this).find(".channel_hover").fadeOut(200);
+	};
+
+	$("#" + div_id).hover(display_hover, hide_hover);
     };
 
 
-    this.attachUI = function(d) { uidiv = d; updateUI(); }
-
     this.updateUI = updateUI;
 
-    this.setNote = function(n) { note = n; updateUI(); }
     this.setLevel = function(l, squelch) { 
 	level = l; 
 	if (squelch) xmitting = (level > squelch);
 	updateUI(); 
-    }
-
-    var addClass = function(k) { if(uidiv) uidiv.classList.add(k); }
-
-    var set_xmit_style = function() {
-	if (!uidiv) return;
-	uidiv.classList.remove("channel_xmit_unknown");
-	uidiv.classList.remove("channel_xmit_noxmit");
-	uidiv.classList.remove("channel_xmit_inxmit");
-
-	if (xmitting) {
-	    addClass("channel_xmit_inxmit");
-	} else {
-	    addClass("channel_xmit_noxmit");
-	}
     }
 
 
@@ -105,7 +109,6 @@ function Channel(entry) {
 
 
 function ChannelBoard() {
-    var uidiv = undefined;
     var channels = [];
 
     var channelIndex = {};
@@ -113,12 +116,16 @@ function ChannelBoard() {
     this.channelIndex = channelIndex;
     var talkgroups = null;
 
-    this.attachUI = function(d) { uidiv = d; };
-
     this.registerTalkgroups = function(tgs) { 
 	talkgroups = tgs; 
 	channels.forEach(function(c) { c.registerTalkGroups(tgs) });
     };
+
+    var updateUI = function() {
+	//$("#channelboard").loadTemplate(
+	var alldata = channels.map(function(e,i,a) { return e.template_data(); });
+	$("#channellist").loadTemplate("#tmpl_channel_status", alldata);
+    }
 
     this.configUpdate = function(config) {
 	channels.length = 0
@@ -130,26 +137,13 @@ function ChannelBoard() {
 	    c.registerTalkGroups(talkgroups); 
 	    c.configUpdate(config);
 	});
+
 	channels.forEach(function(c) {
 	    channelIndex[c.getFrequency()] = c;
 	});
 
-	uidiv.empty();
-
-	channels.forEach(function(c) {
-	    var chan_class = "channel_status";
-	    if (c.isControl()) chan_class = "channel_status_control";
-
-	    var curdiv = document.createElement("div");
-
-	    curdiv.classList.add(chan_class);
-	    if (!c.isControl()) curdiv.classList.add("channel_xmit_unknown");
-	    curdiv.id = "channel_status_" + c.getFrequency();
-
-	    c.attachUI(curdiv);
-
-	    uidiv.append(curdiv);
-	});
+	updateUI();
+	return;
     };
 
 
@@ -212,8 +206,10 @@ function ChannelBoard() {
 	talkgroups.updateUI();
     };
 
+    var baseTG = function(tg) { return parseInt(tg) - parseInt(tg)%16; };
+
     var tg_channels = function(tg) {
-	return channels.filter(function(e,i,a) { return e.getTG() == tg;});
+	return channels.filter(function(e,i,a) { return baseTG(e.getTG()) == baseTG(tg);});
     }
     this.tgChannels = tg_channels;
 
