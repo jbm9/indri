@@ -12,6 +12,7 @@ function ScannerTalkgroup(d, cb) {
     this.tg = tgid;
 
     var div_id = "talkgroup_" + parseInt(tgid).toString(16);
+    var ui = new ScannerTemplate("#"+div_id, $("#tmpl_tg_status"));
 
     //////////////////////
     // Are we following this TG?
@@ -45,32 +46,27 @@ function ScannerTalkgroup(d, cb) {
     var wavs = []; // list of ScannerPlayer events, e.tg == tg, e.path = wav, etc.
 
 
+    var get_desc = function() {
+	return tgid.toString(16) + " " + category + " " + short + " " + long;
+    }
+
     //////////////////////////////////////////////////////////////////////
     // Is this currently filtered out of the display?
     var filtered = false;
     var filtered_xmit = false;
     var filtered_followed = false;
 
-    var setFiltered = function(v, xmit_only, follow_only) { 
-	filtered = v;
-
-	filtered_xmit = xmit_only;
-	filtered_followed = follow_only;
-
-	updateUI();
-    }
-    this.setFiltered = setFiltered;
-
-    var get_desc = function() {
-	return tgid.toString(16) + " " + category + " " + short + " " + long;
-    }
-
     this.applyFilter = function(filter_str, xmit_only, follow_only) {
 	var curdesc_lc = get_desc().toLowerCase();
 	var filter_lc = filter_str.toLowerCase();
 
 	var is_filtered = (-1 == curdesc_lc.indexOf(filter_lc));
-	setFiltered(is_filtered, xmit_only, follow_only);
+        filtered = is_filtered;
+        filtered_xmit = xmit_only;
+        filtered_followed = follow_only;
+
+        updateUI();
+
 	return checkFiltered();
     };
 
@@ -81,6 +77,7 @@ function ScannerTalkgroup(d, cb) {
 
 	return false;
     };
+    this.checkFiltered = checkFiltered;
 
     //////////////////////
     // Actual data render
@@ -88,22 +85,48 @@ function ScannerTalkgroup(d, cb) {
 	var data = {};
 
 	data["talkgroup_div_id"] = div_id;
-	data["talkgroup_xmit_class"] = cb.tgXmitting(tgid) ? "channel_xmit" : "channel_idle";
-	data["tg_idno"] = tgid.toString(16);
-	data["following"] = (followed ? "tg_followed" : "tg_nofollow");
-	data["level"] = "";
-	data["tg_category"] = category;
-	data["short"] = short;
-	data["long"] = long;
-	data["filtered"] = checkFiltered() ? "tg_filtered" : "tg_unfiltered";
 
-	data["cum_class"] = data["filtered"] + " " + data["talkgroup_xmit_class"] + " " + data["following"];
+	data["talkgroup_filter_class"] = "talkgroup_tg_filtered_-_" + (checkFiltered() ? "yes" : "no");
+	data["talkgroup_following_class"] = "talkgroup_tg_following_-_" + (followed ? "yes" : "no");
+	data["talkgroup_xmit_class"] = "talkgroup_xmit_-_" + (cb.tgXmitting(tgid) ? "yes" :"no");
+
+	data["talkgroup_tg_idno"] = tgid.toString(16);
+	data["talkgroup_tg_category"] = category;
+	data["talkgroup_tg_short"] = short;
+	data["talkgroup_tg_long"] = long;
+
+	// data["cum_class"] = data["filtered"] + " " + data["talkgroup_xmit_class"] + " " + data["following"];
 
 	return data;
     };
     this.template_data = template_data;
 
+    var lastdata = {};
+
     var updateUI = function() {
+        var data = template_data();
+
+        ui.update(data);
+        return;
+
+        var do_update = false;
+
+        for (var k in data) {
+            if (data[k] != lastdata[k]) {
+                do_update = true;
+                break;
+            }
+        }
+        lastdata = data;
+
+        if (!do_update) return;
+
+        uidiv = apply_template(uidiv,
+                               data,
+                               $("#" + div_id),
+                               $("#tmpl_tg_status"),
+                               function() {});
+        return; 
 	$("#" + div_id).loadTemplate("#tmpl_tg_status", template_data());
     };
     this.updateUI = updateUI;

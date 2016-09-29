@@ -6,6 +6,20 @@ function Channel(entry) {
     var xmitting = false;
 
     var div_id = "channel_" + parseInt(entry.freq);
+    var ui = new ScannerTemplate("#" + div_id, $("#tmpl_channel_status"), 
+                                 function() {
+	                             var display_hover = function() {
+	                                 $(this).find(".channel_hover").fadeIn(100);
+	                             };
+                                     
+	                             var hide_hover = function() {
+	                                 $(this).find(".channel_hover").fadeOut(200);
+	                             };
+
+	                             $(this).hover(display_hover, hide_hover);
+                                 });
+
+
 
     var config = null;
     this.configUpdate = function(newconfig) { config = newconfig; }
@@ -33,18 +47,18 @@ function Channel(entry) {
 	var data = {};
 	var disptring = ""
 
-	data["freq"] = frequency;
+	data["channel_freq"] = frequency;
 	data["xmitting"] = xmitting;
-	data["xmit_class"] = data["xmitting"] ? "channel_xmit" : "channel_idle";
-	data["channel_xmit_class"] = data["xmitting"] ? "channel_row_xmit" : "channel_row_idle";
+	data["channel_level_class"] = "channel_xmit_-_" + (data["xmitting"] ? "yes" : "no");
+	data["channel_status_class"] = "channel_row_xmit_-_" + (data["xmitting"] ? "yes" : "no");
 
-	data["tg_idno"] = parseInt(tg).toString(16);
+	data["channel_tg_idno"] = parseInt(tg).toString(16);
 	
 	var curTG = talkgroups.lookup(tg);
-	data["tg_category"] = curTG ? curTG.category() : "-";
-	data["short"] = curTG ? curTG.short() : "unk";
-	data["long"] = curTG ? curTG.long() : "[Unknown]";
-	data["level"] = parseInt(level);
+	data["channel_tg_category"] = curTG ? curTG.category() : "-";
+	data["channel_tg_short"] = curTG ? curTG.short() : "unk";
+	data["channel_tg_long"] = curTG ? curTG.long() : "[Unknown]";
+	data["channel_level"] = parseInt(level);
 	if (data["level"] > 0) data["level"] = "+" + data["level"];
 
 	if (data["level"] < -99) data["level"] = ""; // don't show -100s
@@ -55,9 +69,9 @@ function Channel(entry) {
 
 	if (is_control) { // TODO refactor control_counts to attach here
 	    data["is_control"] = true;
-	    data["tg_idno"] = "-";
-	    data["short"] = "control";
-	    data["long"] = " - control -";
+	    data["channel_tg_idno"] = "-";
+	    data["channel_tg_short"] = "control";
+	    data["channel_tg_long"] = " - control -";
 	    data["following"] = "tg_control";
 	}
 
@@ -66,21 +80,9 @@ function Channel(entry) {
     this.template_data = template_data;
 
     var updateUI = function() {
-	var data = template_data();
-	$("#" + div_id).loadTemplate($("#tmpl_channel_status"), data);
-
-	var display_hover = function() {
-	    $(this).find(".channel_hover").fadeIn(100);
-	};
-
-	var hide_hover = function() {
-	    $(this).find(".channel_hover").fadeOut(200);
-	};
-
-	$("#" + div_id).hover(display_hover, hide_hover);
+        var data = template_data();
+        ui.update(data);
     };
-
-
     this.updateUI = updateUI;
 
     this.setLevel = function(l, squelch) { 
@@ -122,9 +124,7 @@ function ChannelBoard() {
     };
 
     var updateUI = function() {
-	//$("#channelboard").loadTemplate(
-	var alldata = channels.map(function(e,i,a) { return e.template_data(); });
-	$("#channellist").loadTemplate("#tmpl_channel_status", alldata);
+        channels.forEach(function(e) { e.updateUI(); });
     }
 
     this.configUpdate = function(config) {
@@ -141,6 +141,10 @@ function ChannelBoard() {
 	channels.forEach(function(c) {
 	    channelIndex[c.getFrequency()] = c;
 	});
+
+	var alldata = channels.map(function(e,i,a) { return e.template_data(); });
+	$("#channellist").loadTemplate("#tmpl_channel_status_dummy", alldata);
+
 
 	updateUI();
 	return;

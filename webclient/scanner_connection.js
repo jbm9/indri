@@ -8,10 +8,11 @@ function ScannerConnection() {
     // state: disconnected/connecting/timeout/connected (no scanner)/live (with scanner)
     var connection_state = "disconnected";
 
-
     // Print messages of this type (array of 'type' values, or just true)
     var print_messages = false;
     this.setPrintMessages = function(v) { print_messages = v; };
+
+    var ui = new ScannerTemplate($("#connstatus"), $("#tmpl-connection-status"));
 
 
     //////////////////////////////////////////////////////////////
@@ -203,18 +204,11 @@ function ScannerConnection() {
 	}
     }
 
-
-    // Actually update the UI
-    this.updateUI = function() {
-	check_timeouts(); // side-effect: update connection_state
-
-	var target = $("#connstatus");
-	var tmpl = $("#tmpl-connection-status");
-
+    var template_data = function() {
 	var data = {};
 
 	data["websocket_connected"] = "C";
-	data["websocket_connected_class"] = "websocket_state_" + connection_state;
+	data["websocket_connected_class"] = "websocket_connected_-_" + connection_state;
 
 
 	data["freq_offset"] = parseInt(control_counts["offset"]);
@@ -236,9 +230,15 @@ function ScannerConnection() {
 	} else if (decode_perc >= 70) {  decode_bucket =  "70";
 	} else                        {  decode_bucket = "bad";  }
 
-	data["decode_stats_class"] = "decode_stats_" + decode_bucket;
+	data["decode_stats_class"] = "decode_stats_-_" + decode_bucket;
+        return data;
+    };
 
-	target.loadTemplate(tmpl, data);
+
+    // Actually update the UI
+    this.updateUI = function() {
+	check_timeouts(); // side-effect: update connection_state
+        ui.update( template_data() );
     };
 
     return this;

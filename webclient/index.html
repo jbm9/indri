@@ -30,27 +30,31 @@
 	<!-- -------- Connection template ------------ -->
 	<script type="text/html" id="tmpl-connection-status">
 	    <div class="connection-status">Conn status:
-		<span class="websocket-connected" data-content="websocket_connected" data-class="websocket_connected_class"></span>
-		<span class="decode-stats" data-content="decode_stats" data-class="decode_stats_class"></span>
-		<span class="freq-offset" data-content-append="freq_offset">Offset: </span>
+		<span class="websocket_connected" data-content="websocket_connected" data-class="websocket_connected_class"></span>
+		<span class="decode_stats" data-content="decode_stats" data-class="decode_stats_class"></span>
+		Offset: <span class="freq_offset" data-content-append="freq_offset"></span>
 	    </div>
 	</script>
 
 
 	<!-- ---------- Channel template ---------- -->
-	<script type="text/html" id="tmpl_channel_status">
-	    <div class="channel-status" data-id="channel_div_id" data-class="channel_xmit_class">
 
-		<span class="channel_tg_short" data-content="short" data-class="following"></span>
-		<span class="channel_level"       data-content="level" data-class="xmit_class" data-title="freq"></span>
+	<script type="text/html" id="tmpl_channel_status_dummy">
+	    <div data-id="channel_div_id"></div>
+        </script>
+	<script type="text/html" id="tmpl_channel_status">
+	    <div class="channel_status" data-id="channel_div_id" data-class="channel_status_class">
+
+		<span class="channel_tg_short" data-content="channel_tg_short" data-class="following"></span>
+		<span class="channel_level"       data-content="channel_level" data-class="channel_level_class" data-title="freq"></span>
 
 		<div class="channel_hover">
-		    <span class="channel_freq"            data-content="freq"></span>
-		    <span class="channel_level"       data-content="level" data-class="xmit_class" data-title="freq"></span><br/>
-		    <span class="channel_tg_idno"       data-content="tg_idno" data-class="following"></span>
-		    <span class="channel_tg_short"      data-content="short"></span><br/>
-		    <span class="channel_tg_category" data-content="tg_category"></span><br/>
-		    <span class="channel_tg_long"       data-content="long"></span>
+		    <span class="channel_freq"            data-content="channel_freq"></span>
+		    <span class="channel_level"       data-content="channel_level" data-class="xmit_class" data-title="freq"></span><br/>
+		    <span class="channel_tg_idno"       data-content="channel_tg_idno" data-class="following"></span>
+		    <span class="channel_tg_short"      data-content="channel_tg_short"></span><br/>
+		    <span class="channel_tg_category" data-content="channel_tg_category"></span><br/>
+		    <span class="channel_tg_long"       data-content="channel_tg_long"></span>
 		</div>
 	    </div>
 	</script>
@@ -58,15 +62,16 @@
 
 	<!-- --------  Talkgroup template ------------ -->
 	<script type="text/html" id="tmpl_tg_status">
-	    <div class="talkgroup-status" data-id="talkgroup_div_id"
-		 data-class="cum_class">
-		<span class="talkgroup_tg_idno" data-content="tg_idno"
-		      data-class="following"></span>
-		<span class="talkgroup_tg_short" data-content="short"></span>
-		<span class="talkgroup_level" data-content="level" data-class="xmit_class"></span>
-		<span class="talkgroup_tg_category" data-content="tg_category"></span><br/>
-		<span class="talkgroup_tg_long" data-content="long"></span>
-	    </div>
+            <div class="talkgroup_filter" data-class="talkgroup_filter_class">
+            <div class="talkgroup_following" data-class="talkgroup_following_class">
+            <div class="talkgroup_xmit" data-class="talkgroup_xmit_class">
+
+	    <div class="talkgroup_status" data-id="talkgroup_div_id">
+		<span class="talkgroup_tg_idno" data-content="talkgroup_tg_idno" data-class="following"></span>
+		<span class="talkgroup_tg_short" data-content="talkgroup_tg_short"></span>
+		<span class="talkgroup_tg_category" data-content="talkgroup_tg_category"></span><br/>
+		<span class="talkgroup_tg_long" data-content="talkgroup_tg_long"></span>
+	    </div></div></div></div>
 	</script>
 
 
@@ -109,6 +114,7 @@
 	<script>
 	</script>
 
+	<script src="scanner_template.js"></script>
 	<script src="scanner_settings.js"></script>
 	<script src="scanner_connection.js"></script>
 	<script src="scanner_config.js"></script>

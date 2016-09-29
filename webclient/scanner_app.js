@@ -19,7 +19,7 @@ function ScannerApp() {
                                });
 
     scanner_connection.updateUI();
-    window.setInterval(scanner_connection.updateUI, 500);
+    window.setInterval(scanner_connection.updateUI, 1000);
 
 
     var scanner_settings = new ScannerSettings();
