@@ -13,7 +13,7 @@
             "gain-rtlsdr": 40.2
         }, 
         "threshold": -30,
-        "Fc": 852600000, 
+        "Fc": 852375000, 
         "Fs": 2600000, 
 	"chan_rate": 12500,
         "min_burst": 3.0,
