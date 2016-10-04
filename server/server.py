@@ -105,7 +105,7 @@ class PostHandler(web.RequestHandler):
 
 
 class WebSocketServer(websocket.WebSocketHandler):
-    KA = json.dumps({"type": "ka"})
+    KA = json.dumps({"type": "ka"}) # keepalive
     def check_origin(self, origin):
         return True
 
@@ -114,6 +114,7 @@ class WebSocketServer(websocket.WebSocketHandler):
         self.connection_id = self.application.i
         self.application.connections[self.connection_id] = self
 
+        self.application.log.info("Client connected.")
 
         self.write_message(json.dumps({ 'type': "config", "config": Gconfig }))
         self.write_message(json.dumps({ 'type': 'connected',
