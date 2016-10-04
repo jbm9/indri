@@ -1,11 +1,20 @@
 indri
 =====
 
-Indri implements an SDR-based public service scanner with a
-web front-end.
+Indri implements an SDR-based public service scanner with a web
+front-end.  Currently only implements Motorola Smartnet, does not work
+with any digital voice modes (which are the most common radio systems
+in public service right now).
 
 Copyright (c) 2016 Josh Myer <josh@joshisanerd.com>
 License: GPL v2
+
+Indri is a near-real-time, archiving scanner.  It's designed to let
+you see what's going on on the radio as live as possible, but it only
+plays the audio of each transmission after it's completed.  It also
+creates audio files of all transmissions received, which can be
+uploaded to S3 or local fileservers for both immediate playback and
+archiving.
 
 
 A lot of the smartnet decoding (and the channel and talkgroup tables)
@@ -18,3 +27,146 @@ Contents:
 scanner/ -- the actual scanner radio front-end
 server/ -- the websocket server that lives between the scanner and the user
 webclient/ -- the website front-end for the scanner output
+scanner_uploader/ -- the scripts that get files up to S3, a remote fileserver, etc
+
+
+Installation:
+
+Check out this repo, and create a new config file for your local radio
+system.  You can find the channel list and talkgroups online
+somewhere.  If you don't know what that means, you've got a bunch of
+catching up to do, and, unfortunately, it's a bit much for me to
+explain in this document, sorry.  Have a look around for how trunking
+radio systems work.
+
+The config file format is mostly-documented in lib/indri/config.py
+
+
+This stack requires at least four components:
+
+scanner/split.py: this actually converts the RF into bits on disk.
+
+A webserver of some sort for the webfrontend: python -m
+SimpleHTTPServer more or less works, but it's a bit dodgy sometimes.
+
+
+You also need a webserver for the captured WAV files, but you can use
+the same webserver for that if you'd like.
+
+server/server.py: the websocket server, which relays messages from the
+scanner to the webfrontend.
+
+The first component to bring up is the websocket server:
+
+cd server/
+python ./server.py -c /path/to/mysite.json
+
+This should print something like "Starting up the indri websocket
+server for 'My First Site'" and then sit there.  The not printing
+anything tells you it's working.
+
+
+
+Next, bring up your webfrontend server:
+
+cd webclient/
+python -m SimpleHTTPServer 9000
+
+And open up a web browser to localhost:9000 (or whatever your server name is)
+
+This should give you a page showing you the site config, with all
+channels listed, etc.  If this doesn't work, make sure the top-level
+"websocket_uri" parameter is set properly.  You should also see
+a line of output from the websocket server as the client connects.
+
+
+
+Next, get the scanner going:
+
+cd scanner/
+python ./split.py -c /path/to/mysite.json
+
+You should start seeing a lot of chatter on the websocket server
+screen now, and the web UI should start showing you state updates.  If
+this doesn't work, look on the scanner's screen for any diagnostic
+errors about the HTTP connections it makes to the websocket server.
+
+You should be able to subscribe to talkgroups and see error messages
+in the web debug console when they error out because we don't have a
+WAV file server up yet.
+
+
+The last step is to bring up the WAV file server:
+
+cd /path/to/captures/
+python -m SimpleHTTPServer 9001
+
+You should see traffic to this as the web frontend tries to get WAVs
+from it.  If not, make sure the "wav_base_uri" parameter is set
+correctly.  If you need to change it, you can force the websocket
+server to reload the config file and propagate those changes to the
+web clients by visiting 'http://localhost:8081/post/reload'.  This
+will print the config file to your browser, and also cause the
+websocket server to push the new configuration down to all connected
+web clients.
+
+
+
+Adding uploaders:
+
+The overall file processing architecture of indri is very
+loosely-coupled.  Once the scanner process creates a WAV file, it can
+get passed through a bunch of other processes before the web frontend
+is notified that it's available.  These currently live in the
+scanner_upload/ directory, as they're all meant for uploading.  For
+examples of how to use these, please see conf/tunability.json for
+their configuration.  To run them, you do something like:
+
+cd scanner_uploader/
+python ./move_uploader.py -c /path/to/mysite.json -n "simple_mover"
+
+There is one which uploads to an S3 bucket, called s3_uploader.py.
+This requires that you have your S3 AWS tokens in the environment
+variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.  I create a
+config file on my local machine that's 
+
+export AWS_ACCESS_KEY_ID=AKABCDEF...
+export AWS_SECRET_ACCESS_KEY=AKZYXWVU...
+
+and then just 'source /etc/indri-aws.sh' before running the
+s3_uploader.py process.
+
+The uploaders are also specifically designed to allow parallel runs.
+I sometimes run into latency issues with Amazon, so to make sure the
+system keeps up even when there are ~18 channels open concurrently, I
+run multiple instances of s3_uploader.py to increase throughput.
+
+Note also that you can run multiple uploaders in series. See
+conf/sfpd.json for my local example, which uploads the files to S3,
+then spools them off to a local fileserver using scp.  The S3 upload
+is sufficient for clients to play the WAV, so we don't hold them up on
+the local copy of the archives.
+
+The sfpd.json example also includes terminating the upload chain with
+an uploader that removes the files.  This allows the whole stack to
+run on a 32GB eMMC drive without filling it up.
+
+
+The system also creates a bunch of control channel and traffic logs,
+which you may want add move_uploaders with delete on for.  This will
+delete the files without leaving them on your local hard drive.
+
+
+Other notes:
+
+This is still very much a work-in-progress.  It needs a lot of work
+done.  If you're interested in contributing but need ideas, please see
+TODO.org in this directory.  Feel free to fork the repo off and submit
+pull requests (or patches if you don't do the github).
+
+
+Thanks for reading this far, and I hope this is useful to you!
+
+Josh Myer
+San Francisco, CA
+2016-10-04

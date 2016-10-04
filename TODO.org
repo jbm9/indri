@@ -1,0 +1,79 @@
+Things to do:
+
+Radio technology
+* +Can capture all channels into individual timestamped files+
+* +Can decode control channel and use it to attribute WAV files+
+* +Automatic frequency tracking to improve control channel decodes+
+* Automatic squelch levelling (2-cluster k-means?)
+* Multiple dongle support (TG attribution is trickier here, may need a new layer)
+* Raspberry Pi support (explodes at startup inside of GNURadio)
+* Support for file-based input device (for testing)
+* Support for USRP input
+* P25 support (Oakland, also getting scattered hits in SF "analog" TGs)
+* EDACS support (BART)
+* Frequency hopping support (ie: normal scanner functionality)
+* Commercial radio support (IMBE?)
+* Add/introduce a noise blanker?  (Sometimes noisy)
+* Add audio squelch to minimize number of useless/empty uploads
+* Auto re-tune to keep track of control channels when they move, otherwise include all non-control channels?
+
+
+Data pipeline/retention
+* +Archive Data to S3+
+* +Archive Data to local fileserver+
+* +Delete archived files+
+* +Archive parsed control channel data stream+
+* +Archive traffic data+
+* Handle restart case (don't just skip existing files at startup)
+* Figure out policy around failed uploads etc
+* Add a fan-out websocket server, "solving" scaling concerns
+* Expose actual covered channels in the protocol, so we know what we're going to miss
+
+
+Infrastructure
+* Make it actually run services, not just screen sessions
+* Deploy documentation
+* Deploy scripts
+* Monitoring infrastructure (statsd etc)
+* Add debug output where appropriate, especially in websocket server
+* Websocket server should authenticate incoming scanner messages
+* Websocket server should scrub out bits of the config before transmission
+* Consider adding compression to reduce bandwidth footprint
+* Config file generator
+
+
+Scanner UI
+* Make it look like it wasn't designed by an engineer
+* +Can see all channels and occupants+
+* +Can see all talkgroups and their rough activity+
+* +Can subscribe to talkgroups to listen to+
+** When removing a TG follow, should purge them from playback queue
+* +Settings are saved across sessions+
+* Add user chat UI
+* Settings can be passed in via the URL
+* Ability to subscribe to a channel (useful for FRS scanning, etc)
+* Can see and replay the last few minutes of each TG
+* Support for livestreams based on the WAVs and subscriptions
+* Add a client-side high-pass filter to get rid of the "wooblies"
+* Better UI to manage playback
+* Make the "play anything" playback function work again
+* Need a way to keep playing on phones (live streams?)
+
+
+Data analysis
+* Talkgroup-talkgroup correlation
+* How informative is "emergency" flag?
+* Correlate the repeater channels with the "free" channels to find what's used
+* Try out some Doppler DOF on the non-repeater channels?
+* Create user flags for "interesting" patterns in unsubd talkgroups
+* Create ability to sub to "interesting" stuff in certain TGs
+
+
+Documentation
+* Document project and motivation
+* Document use cases
+* Document overall stack
+* Document inter-component protocols
+* Document radio code
+* Document uploader code
+* Document webfrontend code (maybe find someone to rewrite it cleanly first)
