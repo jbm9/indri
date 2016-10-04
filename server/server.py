@@ -207,6 +207,8 @@ if __name__ == '__main__':
     application.log.setLevel(logging.DEBUG)
     application.log.addHandler(handler)
 
+    print "Starting up the indri websocket server for '%s'" % Gconfig["sitename"]
+
     application.listen(8081)
     main_loop = ioloop.IOLoop.instance()
     main_loop.start()
