@@ -79,8 +79,8 @@ class radio_channel(gr.hier_block2):
 
     def set_threshold(self, newthreshold):
         self.threshold = newthreshold
-        self.pwr_squelch.set_db(newthreshold)
-        self.power_probe.set_threshold_db(newthreshold)
+        self.pwr_squelch.set_threshold(newthreshold)
+        self.power_probe.set_threshold(newthreshold)
 
     def note_close(self):
         self.closed_once = True
