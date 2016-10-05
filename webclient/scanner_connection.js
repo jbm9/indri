@@ -69,7 +69,8 @@ function ScannerConnection() {
     var control_counts = { "good": 0,
 			   "bad": 0,
 			   "exp": 1.0,
-			   "offset": 0};
+			   "offset": 0,
+                           "squelch": 0 };
 
 
 
@@ -79,6 +80,7 @@ function ScannerConnection() {
 	control_counts.bad = response.bad;
 	control_counts.exp = response.exp;
 	control_counts.offset = response.offset;
+        control_counts.squelch = response.squelch;
     }
 
 
@@ -231,6 +233,8 @@ function ScannerConnection() {
 	} else                        {  decode_bucket = "bad";  }
 
 	data["decode_stats_class"] = "decode_stats_-_" + decode_bucket;
+
+        data["squelch"] = parseInt(100*control_counts["squelch"])/100.0;
         return data;
     };
 

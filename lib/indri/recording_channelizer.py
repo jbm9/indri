@@ -18,6 +18,8 @@ from indri.misc.janky_cpumeter import CPUMeter
 from indri.misc.wavheader import wave_header, wave_fixup_length
 from indri.smartnet.util import decode_frequency_rebanded
 
+from indri.misc.simple_kmeans import two_means
+
 import json
 
 import time
@@ -38,12 +40,17 @@ class recording_channelizer(gr.hier_block2):
         self.base_url = config["websocket_uri"]
         self.threshold = config["scanner"]["threshold"]
 
+        # Stuff for our squelch tuning loop
+        self.power_observations = [] # list of (ts, dB) observations
+        self.threshold_alpha = 0.97    # 0.97 of old average, 0.03 of new pt
+        self.threshold_obs_maxage = 30 # seconds to use
+
         self.freq_corr = config["scanner"]["receiver"]["freq_corr"]
         self.gain = config["scanner"]["receiver"]["gain"]
         self.gain_if = 0
         self.gain_bb = 0
 
-        self.control_counts = {"good": 0, "bad": 0, "exp": 0, "offset": 0}
+        self.control_counts = {"good": 0, "bad": 0, "exp": 0, "offset": 0, "squelch": self.threshold }
 
         self.chan_rate = chan_rate = config["scanner"]["chan_rate"]
 
@@ -203,7 +210,7 @@ class recording_channelizer(gr.hier_block2):
 
             if self.config["scanner"]["self_upload"]:
                 msg["available"] = True
-            
+
             self._submit(msg)
 
         def started_cb(x):
@@ -262,9 +269,30 @@ class recording_channelizer(gr.hier_block2):
         self.server_api.submit(event_body['type'], event_body)
 
 
+    def set_threshold(self, threshold):
+        logging.debug("Setting squelch: %f -> %f", self.threshold, threshold)
+        self.threshold = threshold
+        for rc in self.radio_channels.values():
+            rc.set_threshold(threshold)
+
     def update_powers(self):
+        tnow = time.time()
         for c in self.radio_channels.values():
             c.power_sample()
+            self.power_observations.append( (tnow, c.get_db()) )
+
+        l_pre = len(self.power_observations)
+        t_cutoff = tnow - self.threshold_obs_maxage
+        self.power_observations = [ (ts,db) for ts,db in self.power_observations if ts > t_cutoff ]
+        l_post = len(self.power_observations)
+
+        if l_post and l_pre != l_post: # we're aging out data, so we can recompute
+            midpt = two_means([ p for ts,p in self.power_observations], 6)
+            if None != midpt:
+                newthreshold = self.threshold * self.threshold_alpha + (1.0 - self.threshold_alpha)*midpt
+                logging.debug("Threshold loop: old=%f, proposed=%f, set=%f" % (self.threshold, midpt, newthreshold))
+                self.set_threshold(newthreshold)
+
 
 
     def check_time_triggers(self):
@@ -316,13 +344,14 @@ class recording_channelizer(gr.hier_block2):
                             "good": 0,
                             "bad": 0,
                             "exp": 0,
-                            "offset": self.freq_offset }
+                            "offset": self.freq_offset,
+                            "squelch": self.threshold }
 
         for cs in self.control_sinks.values():
             d = cs.control_counts()
             for k in ["good", "bad", "exp"]:
                 self.control_counts[k] += d[k]
-        
+
         self._submit(self.control_counts)
 
 
@@ -334,6 +363,8 @@ class recording_channelizer(gr.hier_block2):
         content["cc_exp"] = self.control_counts["exp"]
 
         content["offset"] = self.freq_offset
+
+        content["threshold"] = self.threshold
 
         content["levels"] = self.get_levels()
 
@@ -347,6 +378,6 @@ class recording_channelizer(gr.hier_block2):
             procmask = [0] * NCORES
             procmask[i%NCORES] = 1
             b.set_processor_affinity(procmask)
-            
+
         for k, f_i in enumerate(self.radio_channels):
             procaff(self.radio_channels[f_i], k)

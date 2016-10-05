@@ -4,7 +4,7 @@ Radio technology
 * +Can capture all channels into individual timestamped files+
 * +Can decode control channel and use it to attribute WAV files+
 * +Automatic frequency tracking to improve control channel decodes+
-* Automatic squelch levelling (2-cluster k-means?)
+* +Automatic squelch levelling (2-cluster k-means.)+
 * Multiple dongle support (TG attribution is trickier here, may need a new layer)
 * Raspberry Pi support (explodes at startup inside of GNURadio)
 * Support for file-based input device (for testing)
